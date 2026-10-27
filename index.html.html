@@ -1,0 +1,2294 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SOUL BẾN THÀNH - Hệ Thống Quản Lý</title>
+    
+    <!-- External Libraries -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    colors: { brand: '#b91c1c', brandHover: '#991b1b', dark: '#1e293b' }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .table-container::-webkit-scrollbar { height: 6px; }
+        .table-container::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        input:read-only { background-color: #f1f5f9; cursor: not-allowed; }
+        .currency-input { font-variant-numeric: tabular-nums; }
+        .detail-row { animation: slideDown 0.2s ease-out; }
+        @keyframes slideDown { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+        
+        @media print {
+            @page { size: A4 landscape; margin: 10mm; } /* Quay ngang khổ A4 để in đẹp */
+            body { background-color: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            header, .z-40, #global-debt-report-container, #report-filter-bar { display: none !important; }
+            .tab-content { display: none !important; }
+            #tab-bao-cao { display: block !important; }
+            main { padding: 0 !important; max-width: 100% !important; margin: 0 !important; }
+            .shadow-sm { box-shadow: none !important; }
+            .border-gray-200 { border-color: #ccc !important; }
+            .bg-white { background-color: transparent !important; border: 1px solid #ddd; break-inside: avoid; }
+            
+            /* Ép 4 thẻ KPI nằm chung 1 hàng ngang khi in */
+            .grid-cols-1.md\:grid-cols-2.lg\:grid-cols-4 { 
+                display: grid !important; 
+                grid-template-columns: repeat(4, minmax(0, 1fr)) !important; 
+                gap: 0.75rem !important; 
+            }
+            
+            canvas { max-height: 280px !important; }
+        }
+        .locked-mode input:not([readonly]), .locked-mode select { pointer-events: none; opacity: 0.7; background-color: #f1f5f9; }
+        .locked-mode button.save-trigger, .locked-mode button.delete-btn, .locked-mode button.add-btn { display: none; }
+    </style>
+</head>
+<body class="text-gray-800 flex flex-col min-h-screen">
+
+    <!-- HEADER -->
+    <header class="bg-brand shadow-md sticky top-0 z-50">
+        <div class="w-full px-4 md:px-6 lg:px-8">
+            <div class="flex flex-col md:flex-row justify-between items-center h-auto md:h-16 py-3 md:py-0">
+                <div class="flex-shrink-0 flex flex-col justify-center mb-3 md:mb-0">
+                    <span class="font-bold text-xl md:text-2xl text-white tracking-wider leading-none">SOUL BẾN THÀNH</span>
+                    <span class="text-red-200 text-xs mt-1 font-medium tracking-wide uppercase">Sổ theo dõi Thu - Chi</span>
+                </div>
+                
+                <div class="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
+                    <nav class="flex space-x-1 md:space-x-2 overflow-x-auto w-full md:w-auto pb-2 md:pb-0">
+                        <button type="button" class="tab-btn active px-4 py-2 rounded-md font-semibold text-sm transition bg-brandHover text-white whitespace-nowrap" data-target="tab-thu-chi">THU - CHI</button>
+                        <button type="button" class="tab-btn hover:bg-brandHover hover:text-white px-4 py-2 rounded-md font-medium text-sm transition text-red-100 whitespace-nowrap" data-target="tab-cong-no">CÔNG NỢ KHÁCH HÀNG</button>
+                        <button type="button" class="tab-btn hover:bg-brandHover hover:text-white px-4 py-2 rounded-md font-medium text-sm transition text-red-100 whitespace-nowrap" data-target="tab-chi-phi">CHI PHÍ</button>
+                        <button type="button" class="tab-btn hover:bg-brandHover hover:text-white px-4 py-2 rounded-md font-medium text-sm transition text-red-100 whitespace-nowrap" data-target="tab-ban-giao">SỔ BÀN GIAO</button>
+                        <button type="button" class="tab-btn hover:bg-brandHover hover:text-white px-4 py-2 rounded-md font-medium text-sm transition text-red-100 whitespace-nowrap" data-target="tab-bao-cao">BÁO CÁO</button>
+                    </nav>
+
+                    <div class="flex items-center gap-2 border-l border-red-800 pl-4">
+                        <button type="button" id="btn-export" class="bg-gray-800 hover:bg-black text-white px-3 py-1.5 rounded-md text-sm font-medium transition flex items-center shadow-sm" title="Tải dữ liệu về máy">
+                            <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                            Xuất
+                        </button>
+                        <button type="button" id="btn-import-trigger" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-md text-sm font-medium transition flex items-center shadow-sm" title="Tải dữ liệu từ file lên">
+                            <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                            Nhập
+                        </button>
+                        <input type="file" id="input-import" accept=".json" class="hidden">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- DATE, SHIFT CONTROLS -->
+    <div class="bg-white border-b border-gray-200 shadow-sm z-40 relative">
+        <div class="w-full px-4 md:px-6 lg:px-8 py-3 flex flex-col md:flex-row justify-end gap-4 items-center">
+            <div class="flex flex-wrap justify-end items-center gap-4">
+                <div class="flex items-center gap-2">
+                    <label for="global-date" class="text-sm font-medium text-gray-600">Ngày:</label>
+                    <input type="text" id="global-date" class="border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-brand focus:border-brand outline-none text-brand font-semibold cursor-pointer w-32 flatpickr-input" placeholder="dd/mm/yyyy" readonly>
+                </div>
+                <div class="flex items-center gap-2">
+                    <label for="global-shift" class="text-sm font-medium text-gray-600">Ca:</label>
+                    <select id="global-shift" class="border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-brand focus:border-brand outline-none font-semibold cursor-pointer">
+                        <option value="Sáng">Ca Sáng (09:00 - 18:00)</option>
+                        <option value="Chiều">Ca Chiều (18:00 - 02:00)</option>
+                        <option value="Tối">Ca Tối (20:00 - 02:00)</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- BÁO CÁO CÔNG NỢ TOÀN CỤC -->
+    <div id="global-debt-report-container" class="hidden bg-gray-50 border-b border-gray-200 shadow-inner z-30 relative">
+        <div class="w-full px-4 md:px-6 lg:px-8 py-4">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 flex flex-col">
+                <h2 class="text-lg font-bold text-gray-800 uppercase mb-4 border-b pb-2">Báo cáo tổng công nợ (Tất cả các ngày)</h2>
+                <div class="table-container overflow-y-auto max-h-[300px] flex-grow">
+                    <table class="w-full text-sm text-left border-collapse">
+                        <thead class="bg-orange-50 text-orange-800 text-xs uppercase sticky top-0 shadow-sm">
+                            <tr>
+                                <th class="px-4 py-2 border-b w-12 text-center">STT</th>
+                                <th class="px-4 py-2 border-b">Tên Khách Hàng</th>
+                                <th class="px-4 py-2 border-b text-right">Tổng Nợ (VNĐ)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="debt-report-tbody"></tbody>
+                    </table>
+                </div>
+                <div class="border-t border-gray-200 pt-4 mt-4 flex items-center justify-between bg-orange-100 p-3 rounded-lg">
+                    <label class="text-base font-bold text-gray-900 uppercase">Tổng Công Nợ Hệ Thống:</label>
+                    <span id="debt-report-total" class="text-xl font-bold text-red-600">0</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <main class="flex-grow w-full px-4 md:px-6 lg:px-8 py-6">
+        
+        <!-- TAB 1: THU - CHI -->
+        <div id="tab-thu-chi" class="tab-content space-y-6 active relative">
+            <div class="absolute top-0 right-0 -mt-14 mr-4 z-50">
+                <button type="button" id="btn-lock-data" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-1.5 rounded-md text-sm font-bold transition flex items-center shadow-sm">
+                    <svg id="lock-icon" class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"></path></svg>
+                    <span id="lock-text">Mở Khóa</span>
+                </button>
+            </div>
+            
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                <h2 class="text-lg font-bold text-gray-800 mb-4 uppercase border-b pb-2">Báo cáo tổng thu &amp; Phân loại nguồn</h2>
+                <div class="grid grid-cols-2 md:grid-cols-5 gap-4 text-center mb-6">
+                    <div class="bg-gray-50 p-3 rounded-lg border border-gray-100"><p class="text-xs text-gray-500 font-medium mb-1">Tổng Tiền Mặt</p><p class="text-lg font-bold text-green-600" id="sum-cash">0</p></div>
+                    <div class="bg-gray-50 p-3 rounded-lg border border-gray-100"><p class="text-xs text-gray-500 font-medium mb-1">Tổng Visa/Card</p><p class="text-lg font-bold text-blue-600" id="sum-visa">0</p></div>
+                    <div class="bg-gray-50 p-3 rounded-lg border border-gray-100"><p class="text-xs text-gray-500 font-medium mb-1">Chuyển Khoản</p><p class="text-lg font-bold text-purple-600" id="sum-transfer">0</p></div>
+                    <div class="bg-gray-50 p-3 rounded-lg border border-gray-100"><p class="text-xs text-gray-500 font-medium mb-1">Khách Nợ</p><p class="text-lg font-bold text-orange-600" id="sum-debt">0</p></div>
+                    <div class="bg-red-50 p-3 rounded-lg border border-red-100 md:col-span-1 col-span-2"><p class="text-xs text-red-800 font-bold mb-1">TỔNG CỘNG</p><p class="text-xl font-black text-brand" id="sum-all">0</p></div>
+                </div>
+
+                <h3 class="text-sm font-bold text-gray-700 mb-3 uppercase border-b border-dashed pb-2">Chi tiết thu tiền mặt</h3>
+                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 text-sm bg-blue-50 p-4 rounded-lg border border-blue-100">
+                    <div><span class="text-gray-500 font-medium block">DT Tiền mặt:</span><span class="font-bold text-gray-800 text-base" id="cash-detail-rev">0</span></div>
+                    <div><span class="text-gray-500 font-medium block">TIP Tiền mặt:</span><span class="font-bold text-gray-800 text-base" id="cash-detail-tip">0</span></div>
+                    <div><span class="text-gray-500 font-medium block">Thu nước NV:</span><span class="font-bold text-gray-800 text-base" id="cash-detail-water">0</span></div>
+                    <div><span class="text-gray-500 font-medium block">Thu khác (TM):</span><span class="font-bold text-gray-800 text-base" id="cash-detail-other">0</span></div>
+                    <div><span class="text-gray-500 font-medium block">TIP Ngoại tệ:</span><span class="font-bold text-gray-800 text-base" id="cash-detail-foreign">0</span></div>
+                    <div class="border-l-2 border-blue-200 pl-4"><span class="text-blue-700 font-bold block">TỔNG THU TM:</span><span class="font-black text-blue-600 text-lg" id="cash-detail-total-in">0</span></div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Cột Trái -->
+                <div class="space-y-6">
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                        <h3 class="text-md font-bold text-brand mb-4 uppercase">1. Doanh Thu Bán Hàng</h3>
+                        <div class="space-y-4">
+                            <div class="flex items-center justify-between"><label for="rev-cash" class="text-sm font-medium text-gray-700 w-1/3">Tiền mặt:</label><input type="text" id="rev-cash" class="currency-input save-trigger w-2/3 border border-gray-300 rounded px-3 py-2 text-right focus:ring-brand focus:border-brand" placeholder="0"></div>
+                            
+                            <!-- Visa/Card Section -->
+                            <div class="border border-gray-100 rounded-md p-3 bg-gray-50 space-y-3 relative group-rev">
+                                <div class="font-medium text-sm text-gray-800 mb-1 flex justify-between items-center cursor-pointer toggle-details" data-target="visa-details">
+                                    <span>Visa/Card:</span>
+                                    <svg class="w-4 h-4 transform transition-transform chevron-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                </div>
+                                <div class="flex items-center justify-between pl-4">
+                                    <label for="rev-visa-sys" class="text-sm text-gray-600 w-1/3">- Hệ thống:</label>
+                                    <input type="text" id="rev-visa-sys" class="currency-input save-trigger w-2/3 border border-gray-300 rounded px-3 py-2 text-right focus:ring-brand focus:border-brand" placeholder="0">
+                                </div>
+                                <div id="visa-details" class="space-y-3 hidden">
+                                    <div class="flex items-center justify-between pl-4">
+                                        <label for="rev-visa-actual" class="text-sm text-gray-600 w-1/3">- Thực tế:</label>
+                                        <input type="text" id="rev-visa-actual" class="currency-input save-trigger w-2/3 border border-gray-300 rounded px-3 py-2 text-right focus:ring-brand focus:border-brand" placeholder="Không chênh lệch">
+                                    </div>
+                                    <div class="flex items-center justify-between pl-4 pt-1">
+                                        <label for="rev-visa-diff" class="text-sm font-medium text-red-600 w-1/3">Chênh lệch:</label>
+                                        <input type="text" id="rev-visa-diff" class="w-2/3 bg-transparent px-3 py-1 text-right text-red-600 font-bold outline-none" readonly placeholder="0">
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Transfer Section -->
+                            <div class="border border-gray-100 rounded-md p-3 bg-gray-50 space-y-3 relative group-rev">
+                                <div class="font-medium text-sm text-gray-800 mb-1 flex justify-between items-center cursor-pointer toggle-details" data-target="transfer-details">
+                                    <span>Chuyển khoản:</span>
+                                    <svg class="w-4 h-4 transform transition-transform chevron-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                </div>
+                                <div class="flex items-center justify-between pl-4">
+                                    <label for="rev-transfer" class="text-sm text-gray-600 w-1/3">- Hệ thống:</label>
+                                    <input type="text" id="rev-transfer" class="currency-input save-trigger w-2/3 border border-gray-300 rounded px-3 py-2 text-right focus:ring-brand focus:border-brand" placeholder="0">
+                                </div>
+                                <div id="transfer-details" class="space-y-3 hidden">
+                                    <div class="flex items-center justify-between pl-4">
+                                        <label for="rev-transfer-actual" class="text-sm text-gray-600 w-1/3">- Thực tế:</label>
+                                        <input type="text" id="rev-transfer-actual" class="currency-input save-trigger w-2/3 border border-gray-300 rounded px-3 py-2 text-right focus:ring-brand focus:border-brand" placeholder="Không chênh lệch">
+                                    </div>
+                                    <div class="flex items-center justify-between pl-4 pt-1">
+                                        <label for="rev-transfer-diff" class="text-sm font-medium text-red-600 w-1/3">Chênh lệch:</label>
+                                        <input type="text" id="rev-transfer-diff" class="w-2/3 bg-transparent px-3 py-1 text-right text-red-600 font-bold outline-none" readonly placeholder="0">
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="flex items-start justify-between">
+                                <label for="rev-unpaid" class="text-sm font-medium text-gray-700 w-1/3 pt-2">Khách chưa TT:</label>
+                                <div class="w-2/3 flex flex-col">
+                                    <input type="text" id="rev-unpaid" class="currency-input save-trigger border border-gray-300 rounded px-3 py-2 text-right focus:ring-brand focus:border-brand" placeholder="0">
+                                    <div id="thu-chi-debt-warning" class="text-xs text-right mt-1 font-semibold hidden"></div>
+                                </div>
+                            </div>
+                            
+                            <div class="border-t border-gray-200 pt-3 mt-4 flex items-center justify-between"><label for="rev-total" class="text-base font-bold text-gray-900 uppercase">Tổng Doanh Thu:</label><input type="text" id="rev-total" class="w-1/2 bg-transparent text-xl font-bold text-brand text-right outline-none" readonly value="0"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                        <h3 class="text-md font-bold text-brand mb-4 uppercase">2. Thu Khác</h3>
+                        <div class="space-y-4">
+                            <div class="border border-gray-100 rounded-md p-3 bg-gray-50 space-y-3">
+                                <div class="font-medium text-sm text-gray-800 mb-1">Tiền TIP:</div>
+                                <div class="flex items-center justify-between pl-4">
+                                    <label for="tip-card" class="text-sm text-gray-600 w-1/3">- Card:</label>
+                                    <div class="w-2/3 flex items-center gap-2">
+                                        <input type="text" id="tip-card" class="currency-input save-trigger w-full border border-gray-300 rounded px-3 py-2 text-right focus:ring-brand focus:border-brand" placeholder="0">
+                                        <span id="tip-card-warning" class="hidden cursor-help text-lg" title="Cảnh báo: Chênh lệch!">⚠️</span>
+                                    </div>
+                                </div>
+                                <div class="flex items-center justify-between pl-4"><label for="tip-cash" class="text-sm text-gray-600 w-1/3">- Tiền mặt:</label><input type="text" id="tip-cash" class="currency-input save-trigger w-2/3 border border-gray-300 rounded px-3 py-2 text-right focus:ring-brand focus:border-brand" placeholder="0"></div>
+                                <div class="flex items-center justify-between pl-4 gap-2">
+                                    <label for="tip-foreign-amt" class="text-sm text-gray-600 w-1/3">- Ngoại tệ:</label>
+                                    <input type="text" id="tip-foreign-amt" class="currency-input save-trigger w-1/3 border border-gray-300 rounded px-3 py-2 text-right focus:ring-brand focus:border-brand" placeholder="0">
+                                    <select id="tip-foreign-currency" class="save-trigger w-1/3 border border-gray-300 rounded px-2 py-2 text-sm focus:ring-brand focus:border-brand cursor-pointer">
+                                        <option value="" disabled selected>Chọn...</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between"><label for="other-water" class="text-sm font-medium text-gray-700 w-1/3">NV mua nước:</label><input type="text" id="other-water" class="currency-input save-trigger w-2/3 border border-gray-300 rounded px-3 py-2 text-right focus:ring-brand focus:border-brand" placeholder="0"></div>
+                            
+                            <div class="mt-4 pt-3 border-t border-gray-100">
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="text-sm font-medium text-gray-700">Thu khác (Phạt, đền bù...):</span>
+                                    <button type="button" id="btn-add-other-income" class="add-btn bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded text-xs font-medium transition shadow-sm">+ Thêm</button>
+                                </div>
+                                <div id="other-income-list" class="space-y-2"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cột Phải -->
+                <div class="space-y-6">
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 flex flex-col">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-md font-bold text-brand uppercase">3. Bảng Chi (Phát sinh)</h3>
+                            <div class="flex gap-2">
+                                <button type="button" id="btn-manage-supplier" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-1.5 rounded text-sm font-medium transition flex items-center shadow-sm" title="Quản lý Nhà cung cấp">⚙️ NCC</button>
+                                <button type="button" id="btn-manage-cat" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-1.5 rounded text-sm font-medium transition flex items-center shadow-sm" title="Quản lý Khoản mục">⚙️ KM</button>
+                                <button type="button" id="btn-add-expense" class="add-btn bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded text-sm font-medium transition shadow-sm">+ Thêm</button>
+                            </div>
+                        </div>
+                        <div class="table-container overflow-x-auto">
+                            <table class="w-full text-sm text-left border-collapse min-w-[650px]">
+                                <thead class="bg-gray-100 text-gray-700 text-xs uppercase">
+                                    <tr>
+                                        <th class="px-3 py-2 border w-10 text-center">STT</th>
+                                        <th class="px-3 py-2 border w-24">Số PC</th>
+                                        <th class="px-3 py-2 border min-w-[150px]">Nội dung</th>
+                                        <th class="px-3 py-2 border w-32">Số tiền</th>
+                                        <th class="px-3 py-2 border w-40">Khoản mục</th>
+                                        <th class="px-3 py-2 border w-40">Nhà cung cấp</th>
+                                        <th class="px-2 py-2 border w-12 text-center">Xóa</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="expense-tbody" class="text-gray-600"></tbody>
+                            </table>
+                        </div>
+                        <div class="border-t border-gray-200 pt-4 mt-4 flex items-center justify-between bg-red-50 p-3 rounded-lg"><label for="exp-total" class="text-base font-bold text-gray-900 uppercase">Tổng Chi:</label><input type="text" id="exp-total" class="w-1/2 bg-transparent text-xl font-bold text-brand text-right outline-none" readonly value="0"></div>
+                    </div>
+
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                        <h3 class="text-md font-bold text-brand mb-4 uppercase">4. Theo dõi quỹ tiền mặt</h3>
+                        <div class="space-y-4">
+                            <div class="flex items-center justify-between">
+                                <label for="fund-start" class="text-sm font-medium text-gray-700 w-1/3">Tiền quỹ đầu ca <br><span class="text-xs font-normal text-gray-500">(Nhận từ ca trước)</span>:</label>
+                                <input type="text" id="fund-start" class="currency-input save-trigger w-2/3 border border-gray-300 rounded px-3 py-2 text-right focus:ring-brand focus:border-brand" placeholder="0">
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <label for="fund-in-shift" class="text-sm font-medium text-gray-700 w-1/3">Phát sinh trong ca <br><span class="text-xs font-normal text-gray-500">(Thu mặt + Tip TM + Nước + Khác - Chi - Tip Card)</span>:</label>
+                                <input type="text" id="fund-in-shift" class="w-2/3 bg-transparent text-right font-bold text-gray-800 outline-none" readonly value="0">
+                            </div>
+                            <div class="flex items-center justify-between mt-2 pt-2 border-t border-gray-100">
+                                <label for="fund-handed-over" class="text-sm font-medium text-gray-700 w-1/3">Tiền đã nộp/bàn giao <br><span class="text-xs font-normal text-gray-500">(Từ Sổ Bàn Giao)</span>:</label>
+                                <input type="text" id="fund-handed-over" class="w-2/3 bg-transparent text-right font-bold text-red-600 outline-none" readonly value="0">
+                            </div>
+                            <div class="border-t border-gray-200 pt-3 mt-2">
+                                <div class="flex items-center justify-between">
+                                    <label for="fund-current" class="text-sm font-bold text-blue-800 w-1/3">Tổng quỹ (Sổ sách):</label>
+                                    <input type="text" id="fund-current" class="w-2/3 bg-transparent text-right font-bold text-blue-600 text-lg outline-none" readonly value="0">
+                                </div>
+                            </div>
+                            <!-- Theo dõi chênh lệch -->
+                            <div class="flex items-center justify-between mt-2 pt-2 border-t border-gray-200">
+                                <label for="fund-actual" class="text-sm font-medium text-gray-700 w-1/3">Quỹ thực tế tại Soul BT:</label>
+                                <input type="text" id="fund-actual" class="currency-input save-trigger w-2/3 border border-gray-300 rounded px-3 py-2 text-right focus:ring-brand focus:border-brand bg-gray-50" placeholder="Nhập số đếm thực tế...">
+                            </div>
+                            <div class="flex items-start justify-between mt-2">
+                                <label for="fund-diff" class="text-sm font-medium text-gray-700 w-1/3 pt-1">Chênh lệch:</label>
+                                <div class="w-2/3 flex flex-col">
+                                    <input type="text" id="fund-diff" class="w-full bg-transparent text-right font-bold outline-none" readonly value="0" placeholder="0">
+                                    <div id="fund-warning" class="text-xs text-right mt-1 font-bold text-red-600 hidden">⚠️ Cảnh báo: Quỹ thực tế thấp hơn sổ sách!</div>
+                                </div>
+                            </div>
+                            
+                            <p class="text-xs text-gray-500 italic mt-2 text-center">* Quản lý chi tiết lịch sử bàn giao tại tab <b>SỔ BÀN GIAO</b></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 2: CÔNG NỢ -->
+        <div id="tab-cong-no" class="tab-content space-y-6">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-bold text-gray-800 uppercase flex-1">Bảng Nhập Công Nợ (Theo ngày &amp; ca)</h2>
+                    <div class="flex items-center gap-3">
+                        <div id="cong-no-debt-warning" class="text-sm font-bold hidden px-3 py-1 rounded"></div>
+                        <button type="button" id="btn-add-debt" class="bg-brand hover:bg-brandHover text-white px-3 py-1.5 rounded text-sm font-medium transition">+ Thêm dòng</button>
+                    </div>
+                </div>
+                <div class="table-container overflow-x-auto">
+                    <table class="w-full text-sm text-left border-collapse min-w-[500px]">
+                        <thead class="bg-gray-100 text-gray-700 text-xs uppercase">
+                            <tr>
+                                <th class="px-3 py-2 border w-10 text-center">STT</th>
+                                <th class="px-3 py-2 border min-w-[150px]">Tên khách hàng</th>
+                                <th class="px-3 py-2 border w-32">Số tiền</th>
+                                <th class="px-3 py-2 border w-32">Tình trạng</th>
+                                <th class="px-2 py-2 border w-12 text-center">Xóa</th>
+                            </tr>
+                        </thead>
+                        <tbody id="debt-tbody" class="text-gray-600"></tbody>
+                        <tfoot class="bg-orange-50 font-bold text-orange-800">
+                            <tr>
+                                <td colspan="2" class="px-3 py-2 border text-right uppercase">Tổng công nợ trong bảng:</td>
+                                <td class="px-3 py-2 border text-right" id="debt-table-sum">0</td>
+                                <td colspan="2" class="border"></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-md font-bold text-brand uppercase">Tổng hợp Công Nợ trong Ngày <span id="lbl-daily-debt-date" class="text-gray-600 font-medium lowercase normal-case"></span></h2>
+                </div>
+                <div class="table-container overflow-y-auto max-h-[300px]">
+                    <table class="w-full text-sm text-left border-collapse min-w-[500px]">
+                        <thead class="bg-blue-50 text-blue-800 text-xs uppercase sticky top-0">
+                            <tr>
+                                <th class="px-3 py-2 border-b w-10 text-center">STT</th>
+                                <th class="px-3 py-2 border-b min-w-[150px]">Tên khách hàng</th>
+                                <th class="px-3 py-2 border-b w-48 text-right">Tổng Nợ (VNĐ)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="daily-debt-tbody" class="text-gray-600"></tbody>
+                    </table>
+                </div>
+                <div class="border-t border-gray-200 pt-4 mt-4 flex items-center justify-between bg-blue-100 p-3 rounded-lg">
+                    <label class="text-base font-bold text-gray-900 uppercase">Tổng Nợ Phát Sinh Trong Ngày:</label>
+                    <span id="daily-debt-total" class="text-xl font-black text-brand">0</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB CHI PHÍ -->
+        <div id="tab-chi-phi" class="tab-content space-y-6">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4 border-b pb-4">
+                    <div>
+                        <h2 class="text-lg font-bold text-gray-800 uppercase">Sổ Quản Lý &amp; Tra Cứu Chi Phí</h2>
+                        <p class="text-xs text-gray-500 mt-1">Tổng hợp và lọc các khoản chi phí phát sinh toàn hệ thống</p>
+                    </div>
+                    
+                    <!-- Bộ lọc Chi phí -->
+                    <div class="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                        <select id="expense-filter-time" class="border border-gray-300 rounded-md px-3 py-1.5 text-sm font-semibold focus:ring-brand focus:border-brand cursor-pointer">
+                            <option value="ca">Theo Ca Hiện Tại</option>
+                            <option value="ngay">Theo Ngày Hiện Tại</option>
+                            <option value="thang" selected>Theo Tháng Hiện Tại</option>
+                            <option value="tat-ca">Tất Cả Thời Gian</option>
+                        </select>
+                        
+                        <select id="expense-filter-cat" class="border border-gray-300 rounded-md px-3 py-1.5 text-sm font-medium focus:ring-brand focus:border-brand cursor-pointer">
+                            <option value="">Tất cả Khoản Mục</option>
+                        </select>
+                        
+                        <select id="expense-filter-sup" class="border border-gray-300 rounded-md px-3 py-1.5 text-sm font-medium focus:ring-brand focus:border-brand cursor-pointer">
+                            <option value="">Tất cả Nhà Cung Cấp</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="table-container overflow-x-auto">
+                    <table class="w-full text-sm text-left border-collapse min-w-[800px]">
+                        <thead class="bg-red-50 text-red-900 text-xs uppercase sticky top-0 border-b border-red-100">
+                            <tr>
+                                <th class="px-3 py-2.5 border w-12 text-center">STT</th>
+                                <th class="px-3 py-2.5 border w-28">Ngày</th>
+                                <th class="px-3 py-2.5 border w-24">Ca</th>
+                                <th class="px-3 py-2.5 border w-28 bg-red-100 cursor-pointer hover:bg-red-200 transition select-none" id="th-sort-pc" title="Bấm để chuyển đổi thứ tự sắp xếp">
+                                    <div class="flex items-center justify-between gap-1">
+                                        <span>Số PC</span>
+                                        <span id="sort-pc-icon" class="text-xs text-brand font-bold">▲</span>
+                                    </div>
+                                </th>
+                                <th class="px-3 py-2.5 border min-w-[180px]">Nội dung chi</th>
+                                <th class="px-3 py-2.5 border w-36">Khoản mục</th>
+                                <th class="px-3 py-2.5 border w-40">Nhà cung cấp</th>
+                                <th class="px-3 py-2.5 border w-36 text-right">Số tiền (VNĐ)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="expenses-tab-tbody" class="text-gray-700">
+                            <tr><td colspan="9" class="px-4 py-8 text-center text-gray-400">Đang tải danh sách chi phí...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="border-t border-gray-200 pt-4 mt-4 flex flex-col md:flex-row items-center justify-between bg-red-50 p-4 rounded-xl gap-2">
+                    <div class="flex items-center gap-2">
+                        <span class="text-sm font-bold text-gray-700 uppercase">Tổng Chi Phí (Theo bộ lọc):</span>
+                        <span id="expenses-tab-count" class="text-xs bg-red-200 text-red-800 font-bold px-2 py-0.5 rounded-full">0 mục</span>
+                    </div>
+                    <span id="expenses-tab-total" class="text-2xl font-black text-brand">0 đ</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB BÀN GIAO TIỀN -->
+        <div id="tab-ban-giao" class="tab-content space-y-6">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                <h2 class="text-lg font-bold text-brand uppercase mb-4 border-b pb-2">Phiếu Bàn Giao / Nộp Tiền (Chi tiết)</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="space-y-4">
+                        <div class="flex items-center justify-between"><label for="ho-date-actual" class="text-sm font-medium text-gray-700 w-1/3">Ngày thực hiện:</label><input type="text" id="ho-date-actual" class="w-2/3 border border-gray-300 rounded px-3 py-2 text-right focus:ring-brand focus:border-brand bg-gray-50 cursor-pointer flatpickr-input" placeholder="dd/mm/yyyy" readonly></div>
+                        <div class="flex items-center justify-between"><label for="ho-date-for" class="text-sm font-medium text-gray-700 w-1/3">Tiền của Ngày:</label><input type="text" id="ho-date-for" class="w-2/3 border border-gray-300 rounded px-3 py-2 text-right focus:ring-brand focus:border-brand bg-gray-50 cursor-pointer flatpickr-input" placeholder="dd/mm/yyyy" readonly></div>
+                        <div class="flex items-center justify-between"><label for="ho-shift-for" class="text-sm font-medium text-gray-700 w-1/3">Tiền của Ca:</label>
+                            <select id="ho-shift-for" class="w-2/3 border border-gray-300 rounded px-3 py-2 text-right focus:ring-brand focus:border-brand">
+                                <option value="Sáng">Ca Sáng</option>
+                                <option value="Chiều">Ca Chiều</option>
+                                <option value="Tối">Ca Tối</option>
+                                <option value="Nguyên Ngày">Nguyên Ngày</option>
+                            </select>
+                        </div>
+                        <div class="flex items-center justify-between"><label for="ho-sender" class="text-sm font-medium text-gray-700 w-1/3">Người Giao:</label><input type="text" id="ho-sender" class="w-2/3 border border-gray-300 rounded px-3 py-2 text-right focus:ring-brand focus:border-brand" placeholder="Tên / Chức vụ"></div>
+                        <div class="flex items-center justify-between"><label for="ho-receiver" class="text-sm font-medium text-gray-700 w-1/3">Người Nhận:</label><input type="text" id="ho-receiver" class="w-2/3 border border-gray-300 rounded px-3 py-2 text-right focus:ring-brand focus:border-brand" placeholder="Kế toán / Sếp"></div>
+                    </div>
+                    <div class="space-y-4">
+                        <div class="border border-gray-100 rounded-md p-3 bg-gray-50 space-y-3">
+                            <div class="font-medium text-sm text-gray-800 mb-1">Chi tiết các khoản nộp:</div>
+                            <div class="flex items-center justify-between pl-4"><label for="ho-rev-cash" class="text-sm text-gray-600 w-1/3">- DT Tiền mặt:</label><input type="text" id="ho-rev-cash" class="currency-input w-2/3 border border-gray-300 rounded px-3 py-2 text-right focus:ring-brand focus:border-brand ho-amt-input" placeholder="0"></div>
+                            <div class="flex items-center justify-between pl-4"><label for="ho-tip-cash" class="text-sm text-gray-600 w-1/3">- Tip Tiền mặt:</label><input type="text" id="ho-tip-cash" class="currency-input w-2/3 border border-gray-300 rounded px-3 py-2 text-right focus:ring-brand focus:border-brand ho-amt-input" placeholder="0"></div>
+                            <div class="flex items-center justify-between pl-4"><label for="ho-water" class="text-sm text-gray-600 w-1/3">- NV mua nước:</label><input type="text" id="ho-water" class="currency-input w-2/3 border border-gray-300 rounded px-3 py-2 text-right focus:ring-brand focus:border-brand ho-amt-input" placeholder="0"></div>
+                            <div class="flex items-center justify-between pl-4"><label for="ho-tip-card-exchange" class="text-sm text-red-600 font-medium w-1/3">- Đổi Tip Card (Rút mặt):</label><input type="text" id="ho-tip-card-exchange" class="currency-input w-2/3 border border-red-300 rounded px-3 py-2 text-right focus:ring-red-500 focus:border-red-500 ho-amt-input text-red-600" placeholder="Trừ đi (Nếu có)"></div>
+                        </div>
+                        <div class="flex items-center justify-between bg-green-50 p-3 rounded"><label for="ho-total" class="text-base font-bold text-gray-900 w-1/3 uppercase">TỔNG NỘP:</label><input type="text" id="ho-total" class="w-2/3 bg-transparent text-xl font-black text-brand text-right outline-none" readonly value="0"></div>
+                        <div class="text-right pt-2"><button type="button" id="btn-add-handover" class="bg-brand hover:bg-brandHover text-white px-6 py-2 rounded font-bold transition shadow-md w-full md:w-auto">LƯU PHIẾU BÀN GIAO</button></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 mt-6">
+                <h2 class="text-md font-bold text-gray-800 uppercase mb-4">Lịch Sử Nộp Tiền (Toàn hệ thống)</h2>
+                <div class="table-container overflow-x-auto">
+                    <table class="w-full text-sm text-left border-collapse min-w-[800px]">
+                        <thead class="bg-gray-100 text-gray-700 text-xs uppercase">
+                            <tr>
+                                <th class="px-3 py-2 border w-10 text-center">STT</th>
+                                <th class="px-3 py-2 border w-28">Ngày Nộp</th>
+                                <th class="px-3 py-2 border w-40">Tiền thuộc Ngày/ Ca</th>
+                                <th class="px-3 py-2 border">Giao -&gt; Nhận</th>
+                                <th class="px-3 py-2 border">Chi tiết khoản</th>
+                                <th class="px-3 py-2 border w-32 text-right">Tổng Tiền</th>
+                                <th class="px-2 py-2 border w-12 text-center">Xóa</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ho-tbody" class="text-gray-600"><tr><td colspan="7" class="px-4 py-6 text-center text-gray-400">Chưa có lịch sử bàn giao nào.</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 3: BÁO CÁO -->
+        <div id="tab-bao-cao" class="tab-content space-y-6">
+            <!-- BỘ LỌC BÁO CÁO -->
+            <div id="report-filter-bar" class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex flex-col md:flex-row gap-4 items-center justify-between">
+                <h2 class="text-md font-bold text-gray-800 uppercase flex-shrink-0">Tùy Chọn Báo Cáo</h2>
+                <div class="flex flex-wrap items-center justify-end gap-3 w-full md:w-auto">
+                    <select id="report-type" class="border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-brand focus:border-brand outline-none font-semibold cursor-pointer">
+                        <option value="ca" selected>Theo Ca Hiện Tại</option>
+                        <option value="ngay">Theo Ngày Hiện Tại</option>
+                        <option value="thang">Theo Tháng</option>
+                        <option value="quy">Theo Quý</option>
+                    </select>
+                    
+                    <input type="month" id="report-month" class="hidden border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-brand focus:border-brand cursor-pointer">
+                    
+                    <select id="report-quarter" class="hidden border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-brand focus:border-brand outline-none cursor-pointer">
+                        <option value="1">Quý 1</option>
+                        <option value="2">Quý 2</option>
+                        <option value="3">Quý 3</option>
+                        <option value="4">Quý 4</option>
+                    </select>
+                    
+                    <input type="number" id="report-year" class="hidden w-24 border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-brand focus:border-brand text-center" placeholder="Năm" value="2026">
+                    
+                    <button type="button" id="btn-view-report" class="bg-brand hover:bg-brandHover text-white px-4 py-1.5 rounded-md text-sm font-medium transition shadow-sm">Xem Dữ Liệu</button>
+                    <button type="button" id="btn-print-report" class="bg-gray-800 hover:bg-black text-white px-4 py-1.5 rounded-md text-sm font-medium transition shadow-sm flex items-center" title="In Báo Cáo (A4)">
+                        <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                        In Báo Cáo
+                    </button>
+                </div>
+            </div>
+
+            <!-- TỔNG QUAN (KPI Cards - 4 Thẻ Quản Trị) -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <!-- 1. TỔNG DOANH THU & CHI TIẾT NGUỒN -->
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-brand relative overflow-hidden flex flex-col justify-between">
+                    <div>
+                        <div class="flex justify-between items-start mb-1">
+                            <p class="text-xs text-gray-500 font-bold uppercase" id="lbl-dash-rev">Tổng Doanh Thu</p>
+                            <div class="text-brand opacity-20">
+                                <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            </div>
+                        </div>
+                        <h3 class="text-xl font-black text-brand" id="dash-rev-today">0 đ</h3>
+                    </div>
+                    
+                    <div class="grid grid-cols-3 gap-1 pt-2 mt-2 border-t border-gray-100 text-center">
+                        <div class="bg-green-50 p-1.5 rounded border border-green-100">
+                            <span class="text-[10px] font-bold text-green-800 uppercase block">TM</span>
+                            <span class="text-[11px] font-bold text-green-700 tabular-nums" id="dash-rev-tm">0</span>
+                        </div>
+                        <div class="bg-blue-50 p-1.5 rounded border border-blue-100">
+                            <span class="text-[10px] font-bold text-blue-800 uppercase block">Card</span>
+                            <span class="text-[11px] font-bold text-blue-700 tabular-nums" id="dash-rev-card">0</span>
+                        </div>
+                        <div class="bg-purple-50 p-1.5 rounded border border-purple-100">
+                            <span class="text-[10px] font-bold text-purple-800 uppercase block">CK</span>
+                            <span class="text-[11px] font-bold text-purple-700 tabular-nums" id="dash-rev-transfer">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. TỔNG CHI & BIỂU ĐỒ ĐỒNG HỒ ĐO OPEX/REVENUE -->
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-red-500 relative overflow-hidden flex flex-col justify-between">
+                    <div>
+                        <div class="flex justify-between items-start mb-1">
+                            <p class="text-xs text-gray-500 font-bold uppercase" id="lbl-dash-exp">Tổng Chi</p>
+                            <span id="dash-opex-badge" class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">0% OpEx</span>
+                        </div>
+                        <h3 class="text-xl font-black text-red-600" id="dash-exp-today">0 đ</h3>
+                    </div>
+
+                    <!-- VÙNG BIỂU ĐỒ ĐỒNG HỒ ĐO (GAUGE CHART) -->
+                    <div class="relative w-full h-24 flex items-center justify-center my-1">
+                        <canvas id="opexGaugeChart"></canvas>
+                    </div>
+
+                    <div class="text-[11px] text-gray-500 pt-1 border-t border-gray-100 flex justify-between items-center">
+                        <span class="text-green-600 font-semibold"><60% An toàn</span>
+                        <span class="text-yellow-600 font-semibold">60-80% Vừa</span>
+                        <span class="text-red-600 font-semibold">>80% Nguy hiểm</span>
+                    </div>
+                </div>
+
+                <!-- 3. LỢI NHUẬN RÒNG (MỚI) -->
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-emerald-500 relative overflow-hidden flex flex-col justify-between" id="card-net-profit">
+                    <div>
+                        <div class="flex justify-between items-start mb-1">
+                            <p class="text-xs text-gray-500 font-bold uppercase">Lợi Nhuận Ròng</p>
+                            <div class="text-emerald-500 opacity-20">
+                                <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
+                            </div>
+                        </div>
+                        <h3 class="text-xl font-black text-emerald-600" id="dash-net-profit">0 đ</h3>
+                    </div>
+                    <div class="mt-2 text-xs text-gray-500 pt-2 border-t border-gray-100 flex justify-between items-center">
+                        <span>Trạng thái:</span>
+                        <b id="dash-profit-status" class="text-emerald-600 font-semibold">Dòng tiền dương</b>
+                    </div>
+                </div>
+
+                <!-- 4. CÔNG NỢ KHÁCH HÀNG -->
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-orange-500 relative overflow-hidden flex flex-col justify-between">
+                    <div>
+                        <div class="flex justify-between items-start mb-1">
+                            <p class="text-xs text-gray-500 font-bold uppercase">Công Nợ Khách Hàng</p>
+                            <div class="text-orange-500 opacity-20">
+                                <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                            </div>
+                        </div>
+                        <h3 class="text-xl font-black text-orange-600" id="dash-debt-total">0 đ</h3>
+                    </div>
+                    <div class="mt-2 text-[11px] text-gray-400 pt-2 border-t border-gray-100 italic">
+                        * Tổng công nợ chưa thu
+                    </div>
+                </div>
+            </div>
+
+            <!-- PHẦN BIỂU ĐỒ BÁO CÁO (ĐÃ TÁCH HÀNG ĐỘC LẬP) -->
+            <div class="space-y-6">
+                <!-- 1. BIỂU ĐỒ VÒNG NHẪN (DONUT CHART): DÒNG TIỀN THEO PHƯƠNG THỨC THU -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 flex flex-col">
+                    <h2 class="text-md font-bold text-gray-800 uppercase mb-4 border-b pb-2 flex items-center gap-2">
+                        <span> Cơ Cấu Doanh Thu Theo Nguồn</span>
+                    </h2>
+                    <!-- Bố cục gồm Biểu đồ bên trái & Bảng chú thích số tiền bên phải -->
+                    <div class="flex flex-col md:flex-row items-center justify-around gap-6 min-h-[280px] py-2">
+                        <!-- Khung biểu đồ tròn bên trái -->
+                        <div class="relative w-64 h-64 flex-shrink-0">
+                            <canvas id="paymentMethodChart"></canvas>
+                        </div>
+                        <!-- Khung danh sách số tiền bên phải (Render bằng JS) -->
+                        <div id="payment-legend-container" class="w-full md:w-auto flex-grow max-w-sm space-y-2.5">
+                            <!-- JS sẽ render các dòng tên nguồn & số tiền ở đây -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. BIỂU ĐỒ CỘT NGANG (BAR CHART): BẢNG XẾP HẠNG CHI -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 flex flex-col">
+                    <div class="flex justify-between items-center mb-4 border-b pb-2">
+                        <h2 class="text-md font-bold text-gray-800 uppercase flex items-center gap-2">
+                            <span> Bảng Xếp Hạng Khoản Chi</span>
+                        </h2>
+                        <!-- SELECT BOX: Chọn xem theo Khoản mục hoặc Nhà cung cấp -->
+                        <select id="expense-chart-mode" class="border border-gray-300 rounded px-2.5 py-1 text-xs font-semibold text-gray-700 focus:ring-brand focus:border-brand cursor-pointer bg-gray-50 hover:bg-gray-100">
+                            <option value="cat" selected>Theo Khoản Mục</option>
+                            <option value="sup">Theo Nhà Cung Cấp</option>
+                        </select>
+                    </div>
+                    <!-- Chiều cao tự dãn linh hoạt theo số thanh & bảng liệt kê bên dưới -->
+                    <div class="relative w-full min-h-[320px]">
+                        <canvas id="expenseCategoryChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- MODAL QUẢN LÝ KHOẢN MỤC -->
+    <div id="category-modal" class="fixed inset-0 bg-black bg-opacity-50 z-[100] hidden flex items-center justify-center">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+            <div class="flex justify-between items-center mb-4 border-b pb-2">
+                <h2 id="modal-title" class="text-lg font-bold text-gray-800 uppercase">Quản lý khoản mục chi</h2>
+                <button type="button" id="btn-close-cat-modal" class="text-gray-500 hover:text-red-500 font-bold text-3xl leading-none">&times;</button>
+            </div>
+            <ul id="cat-list-container" class="max-h-60 overflow-y-auto mb-4 space-y-2 pr-2"></ul>
+            <div class="text-xs text-gray-500 italic mt-2 border-t pt-3">* Xóa mục sẽ không ảnh hưởng đến các dòng đã lưu trước đó, chỉ xóa khỏi danh sách chọn.</div>
+        </div>
+    </div>
+
+    <script>
+        // XỬ LÝ TIỀN TỆ & BỘ GÕ
+        function formatNumberWithDot(num) { return (!num || isNaN(num)) ? '0' : num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, "."); }
+        function parseCurrencyStr(str) { if (!str) return 0; const p = parseInt(str.toString().replace(/\./g, ''), 10); return isNaN(p) ? 0 : p; }
+        
+        let isComposing = false;
+        document.addEventListener('compositionstart', () => isComposing = true);
+        document.addEventListener('compositionend', (e) => {
+            isComposing = false; 
+            if (e.target && e.target.classList.contains('currency-input')) {
+                formatCurrencyInput(e.target); calculateAll(); saveToStorage();
+            }
+        });
+        document.addEventListener('input', (e) => {
+            if (isComposing) return;
+            if (e.target && e.target.classList.contains('currency-input')) formatCurrencyInput(e.target);
+            if (e.target && e.target.classList.contains('save-trigger')) { calculateAll(); saveToStorage(); }
+        });
+
+        function formatCurrencyInput(input) {
+            let originalLength = input.value.length;
+            let cursorPos = input.selectionStart;
+            let val = input.value.replace(/[^0-9]/g, '');
+            input.value = val ? formatNumberWithDot(parseInt(val, 10)) : '';
+            input.setSelectionRange(cursorPos + (input.value.length - originalLength), cursorPos + (input.value.length - originalLength));
+        }
+
+        // INIT CƠ BẢN
+        let defaultExpenseCategories = ['Khác', 'Lương', 'Mặt bằng', 'Nhập hàng', 'Điện nước'];
+        let expenseCategories = JSON.parse(localStorage.getItem('soul_expense_categories')) || defaultExpenseCategories;
+
+        let defaultSuppliers = ['Khác', 'Nhà cung cấp A', 'Nhà cung cấp B'];
+        let expenseSuppliers = JSON.parse(localStorage.getItem('soul_expense_suppliers')) || defaultSuppliers;
+
+        let defaultCurrencies = ['AUD', 'CNY', 'EUR', 'JPY', 'KRW', 'SGD', 'THB', 'USD'];
+        let foreignCurrencies = JSON.parse(localStorage.getItem('soul_foreign_currencies')) || defaultCurrencies;
+
+        let currentManageType = 'category';
+        let paymentChartInstance = null;
+        let expenseChartInstance = null;
+        let opexGaugeChartInstance = null;
+
+        // Trạng thái sắp xếp cột Số PC ở Tab Chi Phí ('asc': nhỏ đến lớn, 'desc': lớn đến nhỏ)
+        let pcSortOrder = 'asc';
+
+        function sortAlphabetical(arr) { return arr.sort((a, b) => a.localeCompare(b, 'vi')); }
+
+        function getStorageKey() {
+            const date = document.getElementById('global-date').value.replace(/\//g, '-');
+            const shift = document.getElementById('global-shift').value;
+            return `soul_${date}_${shift}`;
+        }
+
+        function updateCurrencySelect() {
+            foreignCurrencies = sortAlphabetical(foreignCurrencies);
+            const select = document.getElementById('tip-foreign-currency');
+            if(!select) return;
+            const currentVal = select.value;
+            select.innerHTML = '<option value="" disabled selected>Chọn...</option>';
+            foreignCurrencies.forEach(c => { select.innerHTML += `<option value="${c}">${c}</option>`; });
+            select.innerHTML += `<option value="__ADD_NEW__" class="font-bold text-brand">+ Thêm...</option>`;
+            
+            if (currentVal && foreignCurrencies.includes(currentVal)) { select.value = currentVal; } 
+            else if (currentVal && currentVal !== '__ADD_NEW__') {
+                foreignCurrencies.push(currentVal);
+                foreignCurrencies = sortAlphabetical(foreignCurrencies);
+                localStorage.setItem('soul_foreign_currencies', JSON.stringify(foreignCurrencies));
+                updateCurrencySelect();
+                select.value = currentVal;
+            } else { select.value = ""; }
+        }
+
+        function updateAllExpenseSelects() {
+            expenseCategories = sortAlphabetical(expenseCategories);
+            document.querySelectorAll('.exp-cat').forEach(select => {
+                const currentVal = select.value;
+                select.innerHTML = '';
+                expenseCategories.forEach(cat => { select.innerHTML += `<option value="${cat}">${cat}</option>`; });
+                select.innerHTML += `<option value="__ADD_NEW__" class="font-bold text-brand">+ Thêm...</option>`;
+                if (expenseCategories.includes(currentVal)) { select.value = currentVal; } 
+                else if (currentVal && currentVal !== '__ADD_NEW__') {
+                    expenseCategories.push(currentVal);
+                    expenseCategories = sortAlphabetical(expenseCategories);
+                    localStorage.setItem('soul_expense_categories', JSON.stringify(expenseCategories));
+                    updateAllExpenseSelects();
+                } else { select.value = ""; }
+            });
+            updateExpenseTabFilterSelects();
+        }
+
+        function updateAllSupplierSelects() {
+            expenseSuppliers = sortAlphabetical(expenseSuppliers);
+            document.querySelectorAll('.exp-supplier').forEach(select => {
+                const currentVal = select.value;
+                select.innerHTML = '';
+                expenseSuppliers.forEach(sup => { select.innerHTML += `<option value="${sup}">${sup}</option>`; });
+                select.innerHTML += `<option value="__ADD_NEW__" class="font-bold text-brand">+ Thêm...</option>`;
+                if (expenseSuppliers.includes(currentVal)) { select.value = currentVal; } 
+                else if (currentVal && currentVal !== '__ADD_NEW__') {
+                    expenseSuppliers.push(currentVal);
+                    expenseSuppliers = sortAlphabetical(expenseSuppliers);
+                    localStorage.setItem('soul_expense_suppliers', JSON.stringify(expenseSuppliers));
+                    updateAllSupplierSelects();
+                } else { select.value = ""; }
+            });
+            updateExpenseTabFilterSelects();
+        }
+
+        function updateExpenseTabFilterSelects() {
+            const catSelect = document.getElementById('expense-filter-cat');
+            const supSelect = document.getElementById('expense-filter-sup');
+            if(!catSelect || !supSelect) return;
+
+            const currCat = catSelect.value;
+            const currSup = supSelect.value;
+
+            catSelect.innerHTML = '<option value="">Tất cả Khoản Mục</option>';
+            expenseCategories.forEach(cat => { catSelect.innerHTML += `<option value="${cat}">${cat}</option>`; });
+            catSelect.value = currCat;
+
+            supSelect.innerHTML = '<option value="">Tất cả Nhà Cung Cấp</option>';
+            expenseSuppliers.forEach(sup => { supSelect.innerHTML += `<option value="${sup}">${sup}</option>`; });
+            supSelect.value = currSup;
+        }
+
+        function renderManageList() {
+            const container = document.getElementById('cat-list-container');
+            if(!container) return;
+            container.innerHTML = '';
+            const list = currentManageType === 'category' ? expenseCategories : expenseSuppliers;
+            document.getElementById('modal-title').innerText = currentManageType === 'category' ? "Quản lý khoản mục chi" : "Quản lý Nhà cung cấp";
+            
+            list.forEach((item, index) => {
+                const li = document.createElement('li');
+                li.className = 'flex justify-between items-center bg-gray-50 px-3 py-2 rounded border border-gray-200';
+                li.innerHTML = `
+                    <span class="font-medium text-gray-700">${item}</span>
+                    <button type="button" class="text-red-500 hover:text-white hover:bg-red-500 font-bold px-2 py-1 rounded transition text-xs border border-red-200" title="Xóa" onclick="deleteManageItem(${index})"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mx-auto pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+                `;
+                container.appendChild(li);
+            });
+        }
+
+        window.deleteManageItem = function(index) {
+            if (currentManageType === 'category') {
+                expenseCategories.splice(index, 1);
+                localStorage.setItem('soul_expense_categories', JSON.stringify(expenseCategories));
+                updateAllExpenseSelects();
+            } else {
+                expenseSuppliers.splice(index, 1);
+                localStorage.setItem('soul_expense_suppliers', JSON.stringify(expenseSuppliers));
+                updateAllSupplierSelects();
+            }
+            renderManageList();
+        };
+
+        // Data Lock State
+        let isDataLocked = false;
+        function toggleDataLock() {
+            isDataLocked = !isDataLocked;
+            const tabThuChi = document.getElementById('tab-thu-chi');
+            const lockIcon = document.getElementById('lock-icon');
+            const lockText = document.getElementById('lock-text');
+            
+            if (isDataLocked) {
+                tabThuChi.classList.add('locked-mode');
+                lockText.innerText = 'Đã Khóa';
+                lockIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>`;
+            } else {
+                tabThuChi.classList.remove('locked-mode');
+                lockText.innerText = 'Mở Khóa';
+                lockIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"></path>`;
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const dateInput = document.getElementById("global-date");
+            const shiftInput = document.getElementById('global-shift');
+            
+            const today = new Date();
+            const dd = String(today.getDate()).padStart(2, '0');
+            const mm = String(today.getMonth() + 1).padStart(2, '0');
+            const yyyy = today.getFullYear();
+            dateInput.value = `${dd}/${mm}/${yyyy}`;
+            
+            const hour = today.getHours();
+            shiftInput.value = (hour >= 9 && hour < 18) ? 'Sáng' : 'Chiều';
+
+            if (typeof flatpickr !== 'undefined') {
+                flatpickr("#global-date", { 
+                    dateFormat: "d/m/Y", 
+                    defaultDate: "today",
+                    onChange: function() { 
+                        shiftInput.value = 'Sáng';
+                        loadFromStorage(); 
+                    }
+                });
+            }
+
+            shiftInput.addEventListener('change', () => loadFromStorage());
+            document.getElementById('btn-lock-data').addEventListener('click', toggleDataLock);
+
+            document.querySelectorAll('.toggle-details').forEach(el => {
+                el.addEventListener('click', function() {
+                    const targetId = this.getAttribute('data-target');
+                    const targetEl = document.getElementById(targetId);
+                    const chevron = this.querySelector('.chevron-icon');
+                    if (targetEl.classList.contains('hidden')) {
+                        targetEl.classList.remove('hidden');
+                        chevron.classList.add('rotate-180');
+                    } else {
+                        targetEl.classList.add('hidden');
+                        chevron.classList.remove('rotate-180');
+                    }
+                });
+            });
+
+            document.getElementById('btn-export').addEventListener('click', exportData);
+            document.getElementById('btn-import-trigger').addEventListener('click', () => document.getElementById('input-import').click());
+            document.getElementById('input-import').addEventListener('change', importData);
+
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.tab-btn').forEach(b => { b.classList.remove('bg-brandHover', 'text-white'); b.classList.add('text-red-100'); });
+                    btn.classList.add('bg-brandHover', 'text-white'); btn.classList.remove('text-red-100');
+                    document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+                    
+                    const targetId = btn.getAttribute('data-target');
+                    document.getElementById(targetId).classList.add('active');
+                    
+                    const debtContainer = document.getElementById('global-debt-report-container');
+                    if(targetId === 'tab-cong-no') {
+                        debtContainer.classList.remove('hidden');
+                        calculateTab2();
+                    } else {
+                        debtContainer.classList.add('hidden');
+                    }
+
+                    if(targetId === 'tab-chi-phi') {
+                        renderExpensesTab();
+                    }
+
+                    if(targetId === 'tab-bao-cao') {
+                        generateReport();
+                    }
+                });
+            });
+
+            document.getElementById('btn-manage-cat').addEventListener('click', () => {
+                currentManageType = 'category';
+                renderManageList();
+                document.getElementById('category-modal').classList.remove('hidden');
+            });
+            document.getElementById('btn-manage-supplier').addEventListener('click', () => {
+                currentManageType = 'supplier';
+                renderManageList();
+                document.getElementById('category-modal').classList.remove('hidden');
+            });
+            document.getElementById('btn-close-cat-modal').addEventListener('click', () => {
+                document.getElementById('category-modal').classList.add('hidden');
+            });
+
+            document.getElementById('btn-add-expense').addEventListener('click', () => { addExpenseRow(); saveToStorage(); });
+            document.getElementById('btn-add-other-income').addEventListener('click', () => { addOtherIncomeRow(); saveToStorage(); });
+            document.getElementById('btn-add-debt').addEventListener('click', () => { addDebtRow(); saveToStorage(); });
+
+            const todayForReport = new Date();
+            const currMonthStr = `${todayForReport.getFullYear()}-${String(todayForReport.getMonth() + 1).padStart(2, '0')}`;
+            document.getElementById('report-month').value = currMonthStr;
+            document.getElementById('report-quarter').value = Math.ceil((todayForReport.getMonth() + 1) / 3).toString();
+            document.getElementById('report-year').value = todayForReport.getFullYear();
+
+            document.getElementById('report-type').addEventListener('change', function() {
+                const val = this.value;
+                document.getElementById('report-month').classList.toggle('hidden', val !== 'thang');
+                document.getElementById('report-quarter').classList.toggle('hidden', val !== 'quy');
+                document.getElementById('report-year').classList.toggle('hidden', val !== 'quy');
+            });
+
+            document.getElementById('expense-chart-mode').addEventListener('change', generateReport);
+
+            document.getElementById('expense-filter-time').addEventListener('change', renderExpensesTab);
+            document.getElementById('expense-filter-cat').addEventListener('change', renderExpensesTab);
+            document.getElementById('expense-filter-sup').addEventListener('change', renderExpensesTab);
+
+            // Bắt sự kiện bấm vào tiêu đề Số PC để chuyển đổi thứ tự sắp xếp
+            document.getElementById('th-sort-pc').addEventListener('click', () => {
+                pcSortOrder = pcSortOrder === 'asc' ? 'desc' : 'asc';
+                document.getElementById('sort-pc-icon').innerText = pcSortOrder === 'asc' ? '▲' : '▼';
+                renderExpensesTab();
+            });
+
+            document.getElementById('btn-view-report').addEventListener('click', generateReport);
+            document.getElementById('btn-print-report').addEventListener('click', () => { window.print(); });
+
+            updateCurrencySelect();
+            updateExpenseTabFilterSelects();
+
+            document.getElementById('tip-foreign-currency').addEventListener('change', function() {
+                if (this.value === '__ADD_NEW__') {
+                    const newCur = prompt("Nhập loại tiền tệ mới (VD: TWD, HKD...):");
+                    if (newCur && newCur.trim() !== '') {
+                        const cleanCur = newCur.trim().toUpperCase();
+                        if (!foreignCurrencies.includes(cleanCur)) {
+                            foreignCurrencies.push(cleanCur);
+                            localStorage.setItem('soul_foreign_currencies', JSON.stringify(foreignCurrencies));
+                        }
+                        updateCurrencySelect();
+                        this.value = cleanCur;
+                    } else {
+                        this.value = foreignCurrencies[0] || '';
+                    }
+                    saveToStorage();
+                } else { saveToStorage(); }
+            });
+
+            initHandoverLogic(); 
+            loadFromStorage(); 
+        });
+
+        // TÍNH TOÁN CHÍNH
+        function calculateAll() { calculateTab1(); calculateTab2(); updateDebtComparison(); generateReport(); }
+
+        function calculateTab1() {
+            const cash = parseCurrencyStr(document.getElementById('rev-cash').value);
+            const visaSys = parseCurrencyStr(document.getElementById('rev-visa-sys').value);
+            const visaActualStr = document.getElementById('rev-visa-actual').value;
+            const visaActual = parseCurrencyStr(visaActualStr);
+            
+            const transferSys = parseCurrencyStr(document.getElementById('rev-transfer').value);
+            const transferActualStr = document.getElementById('rev-transfer-actual').value;
+            const transferActual = parseCurrencyStr(transferActualStr);
+            
+            const unpaid = parseCurrencyStr(document.getElementById('rev-unpaid').value);
+            const tipCard = parseCurrencyStr(document.getElementById('tip-card').value);
+            const tipCash = parseCurrencyStr(document.getElementById('tip-cash').value);
+            const water = parseCurrencyStr(document.getElementById('other-water').value);
+            const tipForeignAmt = document.getElementById('tip-foreign-amt').value;
+            const tipForeignCurrency = document.getElementById('tip-foreign-currency').value;
+
+            let otherAmtTotal = 0;
+            document.querySelectorAll('.other-income-amt').forEach(input => otherAmtTotal += parseCurrencyStr(input.value));
+
+            const visaDiffEl = document.getElementById('rev-visa-diff');
+            let currentVisaDiff = 0;
+            if (visaActualStr.trim() === '') {
+                visaDiffEl.value = '';
+            } else {
+                currentVisaDiff = visaActual - visaSys;
+                visaDiffEl.value = (currentVisaDiff > 0 ? '+' : '') + formatNumberWithDot(currentVisaDiff);
+                visaDiffEl.className = currentVisaDiff >= 0 ? "w-2/3 bg-transparent px-3 py-1 text-right font-bold text-green-600 outline-none" : "w-2/3 bg-transparent px-3 py-1 text-right font-bold text-red-600 outline-none";
+                document.getElementById('visa-details').classList.remove('hidden');
+                document.querySelector('[data-target="visa-details"] .chevron-icon').classList.add('rotate-180');
+            }
+            
+            const transferDiffEl = document.getElementById('rev-transfer-diff');
+            let currentTransferDiff = 0;
+            if (transferActualStr.trim() === '') {
+                transferDiffEl.value = '';
+            } else {
+                currentTransferDiff = transferActual - transferSys;
+                transferDiffEl.value = (currentTransferDiff > 0 ? '+' : '') + formatNumberWithDot(currentTransferDiff);
+                transferDiffEl.className = currentTransferDiff >= 0 ? "w-2/3 bg-transparent px-3 py-1 text-right font-bold text-green-600 outline-none" : "w-2/3 bg-transparent px-3 py-1 text-right font-bold text-red-600 outline-none";
+                document.getElementById('transfer-details').classList.remove('hidden');
+                document.querySelector('[data-target="transfer-details"] .chevron-icon').classList.add('rotate-180');
+            }
+
+            const tipCardWarningEl = document.getElementById('tip-card-warning');
+            if (tipCard > 0 && tipCard > currentVisaDiff) {
+                tipCardWarningEl.classList.remove('hidden');
+                tipCardWarningEl.innerText = "❌";
+                tipCardWarningEl.title = `Lỗi: Tip Card (${formatNumberWithDot(tipCard)}) đang VƯỢT QUÁ số chênh lệch thẻ thực tế (${formatNumberWithDot(currentVisaDiff)})!`;
+                tipCardWarningEl.className = "cursor-help text-lg font-bold text-red-700 animate-pulse";
+            } else {
+                tipCardWarningEl.classList.add('hidden');
+            }
+
+            const totalTipCash = tipCash;
+            const actualVisaFinal = visaActualStr !== '' ? visaActual : visaSys;
+            const actualTransferFinal = transferActualStr !== '' ? transferActual : transferSys;
+
+            document.getElementById('rev-total').value = formatNumberWithDot(cash + visaSys + transferSys + unpaid);
+            
+            document.getElementById('sum-cash').innerText = formatNumberWithDot(cash + totalTipCash + water + otherAmtTotal);
+            document.getElementById('sum-visa').innerText = formatNumberWithDot(actualVisaFinal);
+            document.getElementById('sum-transfer').innerText = formatNumberWithDot(actualTransferFinal);
+            document.getElementById('sum-debt').innerText = formatNumberWithDot(unpaid);
+            document.getElementById('sum-all').innerText = formatNumberWithDot((cash + totalTipCash + water + otherAmtTotal) + actualVisaFinal + actualTransferFinal + unpaid);
+            
+            document.getElementById('cash-detail-rev').innerText = formatNumberWithDot(cash);
+            document.getElementById('cash-detail-tip').innerText = formatNumberWithDot(totalTipCash);
+            document.getElementById('cash-detail-water').innerText = formatNumberWithDot(water);
+            document.getElementById('cash-detail-other').innerText = formatNumberWithDot(otherAmtTotal);
+            document.getElementById('cash-detail-foreign').innerText = (tipForeignAmt || '0') + ' ' + (tipForeignCurrency || '');
+            document.getElementById('cash-detail-total-in').innerText = formatNumberWithDot(cash + totalTipCash + water + otherAmtTotal);
+
+            calcTotalExpense();
+        }
+
+        const otherIncomeList = document.getElementById('other-income-list');
+        function addOtherIncomeRow(data = {desc:'', amt:''}) {
+            const row = document.createElement('div');
+            row.className = 'flex items-center justify-between gap-2';
+            row.innerHTML = `
+                <input type="text" class="save-trigger w-1/2 border border-gray-300 rounded px-2 py-2 text-sm focus:ring-brand focus:border-brand other-income-desc" placeholder="Nội dung..." value="${data.desc}">
+                <input type="text" class="currency-input save-trigger w-1/2 border border-gray-300 rounded px-3 py-2 text-right focus:ring-brand focus:border-brand other-income-amt" placeholder="0" value="${data.amt}">
+                <button type="button" class="delete-btn text-red-500 hover:text-red-700 font-bold px-2 delete-other-income" title="Xóa"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mx-auto pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+            `;
+            otherIncomeList.appendChild(row);
+        }
+
+        otherIncomeList.addEventListener('click', (e) => {
+            if (e.target.classList.contains('delete-other-income')) { 
+                e.target.closest('div').remove(); 
+                calculateAll(); 
+                saveToStorage(); 
+            }
+        });
+
+        const expenseTbody = document.getElementById('expense-tbody');
+        function addExpenseRow(data = {pcCode:'', content:'', amt:'', cat:'', sup:''}) {
+            const tr = document.createElement('tr');
+            
+            let catOptionsHtml = expenseCategories.map(cat => `<option value="${cat}" ${data.cat === cat ? 'selected' : ''}>${cat}</option>`).join('') + `<option value="__ADD_NEW__" class="font-bold text-brand">+ Thêm...</option>`;
+            let supOptionsHtml = expenseSuppliers.map(sup => `<option value="${sup}" ${data.sup === sup ? 'selected' : ''}>${sup}</option>`).join('') + `<option value="__ADD_NEW__" class="font-bold text-brand">+ Thêm...</option>`;
+            
+            tr.innerHTML = `
+                <td class="px-2 py-2 border text-center font-semibold exp-stt">1</td>
+                <td class="px-2 py-2 border"><input type="text" class="save-trigger w-full border-none outline-none bg-transparent exp-pc" placeholder="Số PC..." value="${data.pcCode || ''}"></td>
+                <td class="px-2 py-2 border"><input type="text" class="save-trigger w-full border-none outline-none bg-transparent exp-content" placeholder="Nhập nội dung..." value="${data.content || ''}"></td>
+                <td class="px-2 py-2 border"><input type="text" class="save-trigger currency-input w-full text-right border-none outline-none bg-transparent exp-amt" placeholder="0" value="${data.amt || ''}"></td>
+                <td class="px-2 py-2 border">
+                    <select class="save-trigger w-full border-none outline-none bg-transparent exp-cat cursor-pointer">
+                        ${!data.cat ? `<option value="" disabled selected>Chọn...</option>` : ''}
+                        ${catOptionsHtml}
+                    </select>
+                </td>
+                <td class="px-2 py-2 border">
+                    <select class="save-trigger w-full border-none outline-none bg-transparent exp-supplier cursor-pointer">
+                        ${!data.sup ? `<option value="" disabled selected>Chọn...</option>` : ''}
+                        ${supOptionsHtml}
+                    </select>
+                </td>
+                <td class="px-2 py-2 border text-center"><button type="button" class="delete-btn text-red-500 hover:text-red-700 delete-exp-btn font-bold" title="Xóa"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mx-auto pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button></td>
+            `;
+            expenseTbody.appendChild(tr); updateExpenseSTT();
+
+            tr.querySelectorAll('.save-trigger').forEach(input => {
+                input.addEventListener('input', () => { calculateAll(); saveToStorage(); });
+                input.addEventListener('change', () => { calculateAll(); saveToStorage(); });
+            });
+            
+            tr.querySelector('.exp-cat').addEventListener('change', function() { handleManageAdd(this, 'category'); });
+            tr.querySelector('.exp-supplier').addEventListener('change', function() { handleManageAdd(this, 'supplier'); });
+        }
+
+        function handleManageAdd(selectEl, type) {
+            if (selectEl.value === '__ADD_NEW__') {
+                const newName = prompt(`Nhập tên ${type === 'category' ? 'khoản mục' : 'nhà cung cấp'} mới:`);
+                if (newName && newName.trim() !== '') {
+                    const cleanName = newName.trim();
+                    if (type === 'category') {
+                        if (!expenseCategories.includes(cleanName)) {
+                            expenseCategories.push(cleanName);
+                            expenseCategories = sortAlphabetical(expenseCategories);
+                            localStorage.setItem('soul_expense_categories', JSON.stringify(expenseCategories));
+                        }
+                        updateAllExpenseSelects();
+                    } else {
+                        if (!expenseSuppliers.includes(cleanName)) {
+                            expenseSuppliers.push(cleanName);
+                            expenseSuppliers = sortAlphabetical(expenseSuppliers);
+                            localStorage.setItem('soul_expense_suppliers', JSON.stringify(expenseSuppliers));
+                        }
+                        updateAllSupplierSelects();
+                    }
+                    selectEl.value = cleanName;
+                } else {
+                    selectEl.value = type === 'category' ? (expenseCategories[0] || '') : (expenseSuppliers[0] || '');
+                }
+                saveToStorage();
+            } else {
+                saveToStorage();
+            }
+        }
+
+        expenseTbody.addEventListener('click', (e) => {
+            if (e.target.closest('.delete-exp-btn')) { e.target.closest('tr').remove(); updateExpenseSTT(); calculateAll(); saveToStorage(); }
+        });
+
+        function updateExpenseSTT() { expenseTbody.querySelectorAll('tr').forEach((row, idx) => row.querySelector('.exp-stt').innerText = idx + 1); }
+
+        function calcTotalExpense() {
+            let total = 0;
+            document.querySelectorAll('.exp-amt').forEach(input => total += parseCurrencyStr(input.value));
+            document.getElementById('exp-total').value = formatNumberWithDot(total);
+            calculateFund();
+        }
+
+        function calculateFund() {
+            const startFund = parseCurrencyStr(document.getElementById('fund-start').value);
+            const cash = parseCurrencyStr(document.getElementById('rev-cash').value);
+            const tipCash = parseCurrencyStr(document.getElementById('tip-cash').value);
+            const tipCard = parseCurrencyStr(document.getElementById('tip-card').value);
+            
+            let otherAmtTotal = 0;
+            document.querySelectorAll('.other-income-amt').forEach(input => otherAmtTotal += parseCurrencyStr(input.value));
+            
+            const water = parseCurrencyStr(document.getElementById('other-water').value);
+            const totalExp = parseCurrencyStr(document.getElementById('exp-total').value);
+            const inShift = cash + tipCash + otherAmtTotal + water - totalExp - tipCard;
+            
+            document.getElementById('fund-in-shift').value = (inShift > 0 ? '+' : '') + formatNumberWithDot(inShift);
+            
+            const currentDate = document.getElementById('global-date').value;
+            const currentShift = document.getElementById('global-shift').value;
+            let handedOverTotal = 0;
+            if (typeof globalHandovers !== 'undefined') {
+                globalHandovers.forEach(ho => {
+                    if (ho.forDate === currentDate && (ho.forShift === currentShift || ho.forShift === 'Nguyên Ngày')) {
+                        handedOverTotal += ho.total;
+                    }
+                });
+            }
+            
+            const fundHandedOverEl = document.getElementById('fund-handed-over');
+            if (fundHandedOverEl) {
+                fundHandedOverEl.value = handedOverTotal > 0 ? '-' + formatNumberWithDot(handedOverTotal) : '0';
+            }
+            
+            const currentFund = startFund + inShift - handedOverTotal;
+            document.getElementById('fund-current').value = formatNumberWithDot(currentFund);
+
+            const actualFundStr = document.getElementById('fund-actual').value;
+            const diffEl = document.getElementById('fund-diff');
+            const warningEl = document.getElementById('fund-warning');
+            
+            if (actualFundStr.trim() !== '') {
+                const actualFund = parseCurrencyStr(actualFundStr);
+                const diff = actualFund - currentFund;
+                diffEl.value = (diff > 0 ? '+' : '') + formatNumberWithDot(diff);
+                diffEl.className = diff >= 0 ? "w-full bg-transparent text-right font-bold text-green-600 outline-none" : "w-full bg-transparent text-right font-bold text-red-600 outline-none";
+                
+                if (diff < 0) warningEl.classList.remove('hidden');
+                else warningEl.classList.add('hidden');
+            } else {
+                diffEl.value = '';
+                warningEl.classList.add('hidden');
+            }
+        }
+
+        const debtTbody = document.getElementById('debt-tbody');
+        function addDebtRow(data = {name:'', amt:'', status:'Chưa TT'}) {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="px-2 py-2 border text-center font-semibold debt-stt">1</td>
+                <td class="px-2 py-2 border"><input type="text" class="save-trigger w-full border-none outline-none bg-transparent debt-name" placeholder="Tên KH..." value="${data.name}"></td>
+                <td class="px-2 py-2 border"><input type="text" class="save-trigger currency-input debt-amt w-full text-right border-none outline-none bg-transparent" placeholder="0" value="${data.amt}"></td>
+                <td class="px-2 py-2 border">
+                    <select class="save-trigger w-full border-none outline-none bg-transparent text-sm debt-status">
+                        <option value="Chưa TT" class="text-red-600" ${data.status === 'Chưa TT' ? 'selected' : ''}>Chưa TT</option>
+                        <option value="Đã TT" class="text-green-600" ${data.status === 'Đã TT' ? 'selected' : ''}>Đã TT</option>
+                    </select>
+                </td>
+                <td class="px-2 py-2 border text-center"><button type="button" class="text-red-500 hover:text-red-700 delete-debt-btn font-bold" title="Xóa"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mx-auto pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button></td>
+            `;
+            debtTbody.appendChild(tr); updateDebtSTT();
+
+            tr.querySelectorAll('.save-trigger').forEach(input => {
+                input.addEventListener('input', () => { calculateAll(); saveToStorage(); });
+                input.addEventListener('change', () => { calculateAll(); saveToStorage(); });
+            });
+        }
+
+        debtTbody.addEventListener('click', (e) => {
+            if (e.target.closest('.delete-debt-btn')) { e.target.closest('tr').remove(); updateDebtSTT(); calculateAll(); saveToStorage(); }
+        });
+        function updateDebtSTT() { debtTbody.querySelectorAll('tr').forEach((row, idx) => row.querySelector('.debt-stt').innerText = idx + 1); }
+
+        function calculateTab2() {
+            let globalDebtMap = {};
+            let dailyDebtMap = {}; 
+            const currentKey = getStorageKey();
+            const targetDateStr = document.getElementById('global-date').value.replace(/\//g, '-');
+            const targetShiftStr = document.getElementById('global-shift').value;
+
+            for (let i = 0; i < localStorage.length; i++) {
+                let key = localStorage.key(i);
+                if (key.startsWith('soul_') && key !== 'soul_global_handovers' && key !== 'soul_expense_categories' && key !== 'soul_expense_suppliers' && key !== 'soul_foreign_currencies' && key !== currentKey) {
+                    try {
+                        let parts = key.split('_'); 
+                        let datePart = parts[1]; 
+                        let shiftPart = parts[2];
+
+                        let data = JSON.parse(localStorage.getItem(key));
+                        if (data && data.debts) {
+                            data.debts.forEach(debt => {
+                                const name = debt.name ? debt.name.trim() : '';
+                                const amt = parseCurrencyStr(debt.amt);
+                                const status = debt.status || 'Chưa TT';
+                                if (status === 'Chưa TT' && name && amt > 0) {
+                                    if (!globalDebtMap[name]) globalDebtMap[name] = { total: 0, details: [] };
+                                    globalDebtMap[name].total += amt;
+                                    globalDebtMap[name].details.push({ date: datePart, shift: shiftPart, amt: amt });
+                                    
+                                    if (datePart === targetDateStr) {
+                                        dailyDebtMap[name] = (dailyDebtMap[name] || 0) + amt;
+                                    }
+                                }
+                            });
+                        }
+                    } catch (e) {}
+                }
+            }
+
+            debtTbody.querySelectorAll('tr').forEach(row => {
+                const nameInput = row.querySelector('.debt-name');
+                const amtInput = row.querySelector('.debt-amt');
+                const statusSelect = row.querySelector('.debt-status');
+
+                if (nameInput && amtInput && statusSelect) {
+                    const name = nameInput.value.trim();
+                    const amt = parseCurrencyStr(amtInput.value);
+                    const status = statusSelect.value;
+                    if (status === 'Chưa TT' && name && amt > 0) {
+                        if (!globalDebtMap[name]) globalDebtMap[name] = { total: 0, details: [] };
+                        globalDebtMap[name].total += amt;
+                        globalDebtMap[name].details.push({ date: targetDateStr, shift: targetShiftStr + " (Ca này)", amt: amt });
+                        
+                        dailyDebtMap[name] = (dailyDebtMap[name] || 0) + amt;
+                    }
+                }
+            });
+
+            let debtArray = Object.keys(globalDebtMap).map(key => ({ name: key, total: globalDebtMap[key].total, details: globalDebtMap[key].details })).sort((a, b) => b.total - a.total);
+            const reportTbody = document.getElementById('debt-report-tbody');
+            reportTbody.innerHTML = '';
+            let sumDebtReport = 0;
+            
+            if (debtArray.length === 0) {
+                reportTbody.innerHTML = `<tr><td colspan="3" class="px-4 py-4 text-center text-gray-400">Trống</td></tr>`;
+            } else {
+                debtArray.forEach((item, idx) => {
+                    sumDebtReport += item.total;
+                    let rankClass = idx === 0 ? "bg-red-500 text-white" : (idx === 1 ? "bg-orange-400 text-white" : "bg-gray-100 text-gray-600");
+                    
+                    item.details.sort((a, b) => {
+                        let dateA = a.date.split('-');
+                        let dateB = b.date.split('-');
+                        let timeA = new Date(dateA[2], dateA[1] - 1, dateA[0]).getTime();
+                        let timeB = new Date(dateB[2], dateB[1] - 1, dateB[0]).getTime();
+                        if (timeA === timeB) {
+                            const shiftOrder = {'Sáng': 1, 'Chiều': 2, 'Tối': 3};
+                            let shiftA = shiftOrder[a.shift.replace(' (Ca này)', '')] || 0;
+                            let shiftB = shiftOrder[b.shift.replace(' (Ca này)', '')] || 0;
+                            return shiftA - shiftB;
+                        }
+                        return timeA - timeB;
+                    });
+
+                    let detailsHtml = item.details.map(d => `<div class="text-xs text-gray-600 ml-2 border-l-2 border-brand pl-2 mt-1 py-1 bg-white rounded-r-md">▪ <span class="font-medium">${d.date} (${d.shift})</span> : <span class="font-bold text-red-500">${formatNumberWithDot(d.amt)} đ</span></div>`).join('');
+
+                    reportTbody.innerHTML += `
+                    <tr class="border-b border-gray-100 hover:bg-orange-100 cursor-pointer transition" onclick="this.nextElementSibling.classList.toggle('hidden')">
+                        <td class="px-4 py-2 text-center"><span class="inline-block w-6 h-6 rounded-full text-xs font-bold leading-6 ${rankClass}">${idx + 1}</span></td>
+                        <td class="px-4 py-2 font-semibold text-gray-800">${item.name} <span class="text-[10px] text-blue-500 ml-2 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">Chi tiết ▼</span></td>
+                        <td class="px-4 py-2 text-right font-bold text-red-600">${formatNumberWithDot(item.total)}</td>
+                    </tr>
+                    <tr class="hidden bg-orange-50 detail-row shadow-inner">
+                        <td colspan="3" class="px-4 py-3">
+                            <div class="font-bold text-sm text-gray-700 mb-1 border-b border-orange-100 pb-1">Chi tiết nợ của [${item.name}]:</div>
+                            ${detailsHtml}
+                        </td>
+                    </tr>`;
+                });
+            }
+            document.getElementById('debt-report-total').innerText = formatNumberWithDot(sumDebtReport);
+
+            document.getElementById('lbl-daily-debt-date').innerText = `(${document.getElementById('global-date').value})`;
+            let dailyDebtArray = Object.keys(dailyDebtMap).map(key => ({ name: key, total: dailyDebtMap[key] })).sort((a, b) => b.total - a.total);
+            const dailyTbody = document.getElementById('daily-debt-tbody');
+            dailyTbody.innerHTML = '';
+            let sumDailyDebt = 0;
+            
+            if (dailyDebtArray.length === 0) {
+                dailyTbody.innerHTML = `<tr><td colspan="3" class="px-4 py-4 text-center text-gray-400">Không có công nợ phát sinh trong ngày này.</td></tr>`;
+            } else {
+                dailyDebtArray.forEach((item, idx) => {
+                    sumDailyDebt += item.total;
+                    dailyTbody.innerHTML += `<tr class="border-b border-gray-100 hover:bg-blue-50">
+                        <td class="px-3 py-2 text-center font-semibold text-gray-500">${idx + 1}</td>
+                        <td class="px-3 py-2 font-semibold text-gray-800">${item.name}</td>
+                        <td class="px-3 py-2 text-right font-bold text-red-600">${formatNumberWithDot(item.total)}</td>
+                    </tr>`;
+                });
+            }
+            document.getElementById('daily-debt-total').innerText = formatNumberWithDot(sumDailyDebt);
+        }
+
+        function updateDebtComparison() {
+            const unpaidInput = parseCurrencyStr(document.getElementById('rev-unpaid').value);
+            
+            let tableDebtTotal = 0;
+            debtTbody.querySelectorAll('tr').forEach(row => {
+                const amt = parseCurrencyStr(row.querySelector('.debt-amt').value);
+                const status = row.querySelector('.debt-status').value;
+                if (status === 'Chưa TT' && amt > 0) {
+                    tableDebtTotal += amt;
+                }
+            });
+
+            document.getElementById('debt-table-sum').innerText = formatNumberWithDot(tableDebtTotal);
+            
+            const diff = unpaidInput - tableDebtTotal;
+            const w1 = document.getElementById('thu-chi-debt-warning');
+            const w2 = document.getElementById('cong-no-debt-warning');
+
+            if (unpaidInput === 0 && tableDebtTotal === 0) {
+                w1.classList.add('hidden');
+                w2.classList.add('hidden');
+            } else if (diff === 0) {
+                w1.innerText = "✓ Khớp với Bảng Công Nợ";
+                w1.className = "text-xs text-right mt-1 font-bold text-green-600 block";
+                w2.innerText = "✓ Đã khớp Thu-Chi";
+                w2.className = "text-sm font-bold block px-3 py-1 rounded bg-green-100 text-green-700 border border-green-200";
+            } else {
+                w1.innerText = "⚠️ Lệch " + formatNumberWithDot(Math.abs(diff)) + " so với Bảng Công Nợ";
+                w1.className = "text-xs text-right mt-1 font-bold text-red-600 block";
+                w2.innerText = "⚠️ Lệch " + formatNumberWithDot(Math.abs(diff)) + " so với Thu-Chi";
+                w2.className = "text-sm font-bold block px-3 py-1 rounded bg-red-100 text-red-700 border border-red-200";
+            }
+        }
+
+        // TAB CHI PHÍ - RENDER & QUẢN LÝ
+        function renderExpensesTab() {
+            const tbody = document.getElementById('expenses-tab-tbody');
+            if(!tbody) return;
+
+            const timeFilter = document.getElementById('expense-filter-time').value;
+            const catFilter = document.getElementById('expense-filter-cat').value;
+            const supFilter = document.getElementById('expense-filter-sup').value;
+
+            const currentDateStr = document.getElementById('global-date').value.replace(/\//g, '-');
+            const currentShiftStr = document.getElementById('global-shift').value;
+            
+            let targetDateParts = currentDateStr.split('-');
+            let curD = parseInt(targetDateParts[0], 10);
+            let curM = parseInt(targetDateParts[1], 10);
+            let curY = parseInt(targetDateParts[2], 10);
+
+            let allExpenses = [];
+
+            for (let i = 0; i < localStorage.length; i++) {
+                let key = localStorage.key(i);
+                if (key.startsWith('soul_') && key !== 'soul_global_handovers' && key !== 'soul_expense_categories' && key !== 'soul_expense_suppliers' && key !== 'soul_foreign_currencies') {
+                    try {
+                        let parts = key.split('_');
+                        if (parts.length < 3) continue;
+                        let datePart = parts[1];
+                        let shiftPart = parts[2];
+
+                        let dateObjParts = datePart.split('-');
+                        let d = parseInt(dateObjParts[0], 10);
+                        let m = parseInt(dateObjParts[1], 10);
+                        let y = parseInt(dateObjParts[2], 10);
+
+                        let timeMatch = false;
+                        if (timeFilter === 'ca') {
+                            if (datePart === currentDateStr && shiftPart === currentShiftStr) timeMatch = true;
+                        } else if (timeFilter === 'ngay') {
+                            if (datePart === currentDateStr) timeMatch = true;
+                        } else if (timeFilter === 'thang') {
+                            if (m === curM && y === curY) timeMatch = true;
+                        } else if (timeFilter === 'tat-ca') {
+                            timeMatch = true;
+                        }
+
+                        if (timeMatch) {
+                            let data = JSON.parse(localStorage.getItem(key));
+                            if (data && data.expenses) {
+                                data.expenses.forEach((exp, expIdx) => {
+                                    let amt = parseCurrencyStr(exp.amt);
+                                    let pcCode = exp.pcCode ? exp.pcCode.trim() : '';
+                                    let cat = (exp.cat && exp.cat.trim() !== '') ? exp.cat.trim() : 'Khác';
+                                    let sup = (exp.sup && exp.sup.trim() !== '') ? exp.sup.trim() : 'Khác / Chưa chọn';
+                                    let content = exp.content ? exp.content.trim() : '';
+
+                                    if (amt > 0 || content || pcCode) {
+                                        let catMatch = !catFilter || cat === catFilter;
+                                        let supMatch = !supFilter || sup === supFilter;
+
+                                        if (catMatch && supMatch) {
+                                            allExpenses.push({
+                                                storageKey: key,
+                                                expIndex: expIdx,
+                                                date: datePart,
+                                                shift: shiftPart,
+                                                pcCode: pcCode || '---',
+                                                content: content || 'Chưa nhập nội dung',
+                                                cat: cat,
+                                                sup: sup,
+                                                amt: amt,
+                                                // Lưu timestamp để so sánh ngày chính xác
+                                                // Tạo chuỗi YYYYMMDD chuẩn để so sánh ngày cực nhanh mà không cần tạo object Date
+                                                dateCode: parseInt(`${y}${String(m).padStart(2, '0')}${String(d).padStart(2, '0')}`, 10)
+                                            });
+                                        }
+                                    }
+                                });
+                            }
+                        }
+                    } catch(e) {}
+                }
+            }
+
+            // SẮP XẾP DANH SÁCH CHI PHÍ
+            const shiftWeight = { 'Tối 2': 3, 'Tối': 3, 'Chiều': 2, 'Sáng': 1 };
+
+            allExpenses.sort((a, b) => {
+                if (pcSortOrder === 'asc') {
+                    // CHẾ ĐỘ 1: Sắp xếp theo Số PC tăng dần (nhỏ đến lớn)
+                    let numA = parseInt(a.pcCode.replace(/[^0-9]/g, ''), 10);
+                    let numB = parseInt(b.pcCode.replace(/[^0-9]/g, ''), 10);
+
+                    let isNumAValid = !isNaN(numA);
+                    let isNumBValid = !isNaN(numB);
+
+                    if (isNumAValid && isNumBValid) return numA - numB;
+                    if (isNumAValid) return -1;
+                    if (isNumBValid) return 1;
+                    return a.pcCode.localeCompare(b.pcCode, 'vi');
+                } else {
+                    // CHẾ ĐỘ 2: Sắp xếp theo NGÀY MỚI NHẤT GIẢM DẦN
+                    if (b.dateCode !== a.dateCode) {
+                        return b.dateCode - a.dateCode; // Ngày mới nhất lên đầu
+                    }
+                    // Trùng ngày thì xếp theo Ca
+                    let weightA = shiftWeight[a.shift] || 0;
+                    let weightB = shiftWeight[b.shift] || 0;
+                    return weightB - weightA;
+                }
+            });
+
+            tbody.innerHTML = '';
+            let totalSum = 0;
+
+            if (allExpenses.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="8" class="px-4 py-8 text-center text-gray-400 font-medium">Không tìm thấy khoản chi phí nào phù hợp với bộ lọc.</td></tr>`;
+            } else {
+                allExpenses.forEach((exp, idx) => {
+                    totalSum += exp.amt;
+                    
+                    // Phân biệt màu chữ cho từng Ca (không nền, không viền)
+                    let shiftClass = "text-gray-700 font-bold";
+                    if (exp.shift === 'Sáng') {
+                        shiftClass = "text-green-600 font-bold";
+                    } else if (exp.shift === 'Chiều') {
+                        shiftClass = "text-orange-500 font-bold";
+                    } else if (exp.shift === 'Tối 2' || exp.shift === 'Tối') {
+                        shiftClass = "text-purple-600 font-bold";
+                    }
+
+                    tbody.innerHTML += `
+                        <tr class="border-b border-gray-100 hover:bg-red-50 transition">
+                            <td class="px-3 py-2.5 text-center font-semibold text-gray-500">${idx + 1}</td>
+                            <td class="px-3 py-2.5 font-medium text-gray-800 whitespace-nowrap">${exp.date.replace(/-/g, '/')}</td>
+                            <td class="px-3 py-2.5 whitespace-nowrap text-sm ${shiftClass}">${exp.shift}</td>
+                            <td class="px-3 py-2.5 font-bold text-gray-700 whitespace-nowrap bg-red-50/30">${exp.pcCode}</td>
+                            <td class="px-3 py-2.5 font-medium text-gray-900">${exp.content}</td>
+                            <td class="px-3 py-2.5 text-sm font-medium text-gray-700">${exp.cat}</td>
+                            <td class="px-3 py-2.5 text-sm font-medium text-gray-700">${exp.sup}</td>
+                            <td class="px-3 py-2.5 text-right font-bold text-red-600 whitespace-nowrap">${formatNumberWithDot(exp.amt)} đ</td>
+                        </tr>
+                    `;
+                });
+            }
+
+            document.getElementById('expenses-tab-count').innerText = `${allExpenses.length} mục`;
+            document.getElementById('expenses-tab-total').innerText = `${formatNumberWithDot(totalSum)} đ`;
+        }
+
+        // BÀN GIAO TIỀN LOGIC
+        let globalHandovers = [];
+        function initHandoverLogic() {
+            const savedHandovers = localStorage.getItem('soul_global_handovers');
+            if (savedHandovers) {
+                try { globalHandovers = JSON.parse(savedHandovers); } catch(e) { globalHandovers = []; }
+            }
+
+            if (typeof flatpickr !== 'undefined') {
+                flatpickr("#ho-date-actual", { dateFormat: "d/m/Y", defaultDate: "today" });
+                flatpickr("#ho-date-for", { dateFormat: "d/m/Y", defaultDate: "today" });
+            }
+
+            document.querySelectorAll('.ho-amt-input').forEach(input => {
+                input.addEventListener('input', calculateHandoverTotal);
+            });
+
+            document.getElementById('btn-add-handover').addEventListener('click', saveHandoverRecord);
+            renderHandoverHistory();
+        }
+
+        function calculateHandoverTotal() {
+            const revCash = parseCurrencyStr(document.getElementById('ho-rev-cash').value);
+            const tipCash = parseCurrencyStr(document.getElementById('ho-tip-cash').value);
+            const water = parseCurrencyStr(document.getElementById('ho-water').value);
+            const tipCardExchange = parseCurrencyStr(document.getElementById('ho-tip-card-exchange').value);
+
+            const total = revCash + tipCash + water - tipCardExchange;
+            document.getElementById('ho-total').value = formatNumberWithDot(total);
+        }
+
+        function saveHandoverRecord() {
+            const actualDate = document.getElementById('ho-date-actual').value;
+            const forDate = document.getElementById('ho-date-for').value;
+            const forShift = document.getElementById('ho-shift-for').value;
+            const sender = document.getElementById('ho-sender').value.trim();
+            const receiver = document.getElementById('ho-receiver').value.trim();
+
+            const revCash = parseCurrencyStr(document.getElementById('ho-rev-cash').value);
+            const tipCash = parseCurrencyStr(document.getElementById('ho-tip-cash').value);
+            const water = parseCurrencyStr(document.getElementById('ho-water').value);
+            const tipCardExchange = parseCurrencyStr(document.getElementById('ho-tip-card-exchange').value);
+            const total = revCash + tipCash + water - tipCardExchange;
+
+            if (total <= 0) {
+                alert("Số tiền bàn giao phải lớn hơn 0!");
+                return;
+            }
+
+            const handoverRecord = {
+                id: Date.now(),
+                actualDate,
+                forDate,
+                forShift,
+                sender: sender || 'Chưa nhập',
+                receiver: receiver || 'Chưa nhập',
+                revCash,
+                tipCash,
+                water,
+                tipCardExchange,
+                total
+            };
+
+            globalHandovers.unshift(handoverRecord);
+            localStorage.setItem('soul_global_handovers', JSON.stringify(globalHandovers));
+            renderHandoverHistory();
+            calculateFund();
+            
+            // Clear input fields
+            document.getElementById('ho-rev-cash').value = '';
+            document.getElementById('ho-tip-cash').value = '';
+            document.getElementById('ho-water').value = '';
+            document.getElementById('ho-tip-card-exchange').value = '';
+            document.getElementById('ho-total').value = '0';
+        }
+
+        function renderHandoverHistory() {
+            const tbody = document.getElementById('ho-tbody');
+            if(!tbody) return;
+            tbody.innerHTML = '';
+
+            if (globalHandovers.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="px-4 py-6 text-center text-gray-400">Chưa có lịch sử bàn giao nào.</td></tr>`;
+                return;
+            }
+
+            globalHandovers.forEach((ho, idx) => {
+                let details = [];
+                if (ho.revCash > 0) details.push(`DT TM: ${formatNumberWithDot(ho.revCash)}`);
+                if (ho.tipCash > 0) details.push(`Tip TM: ${formatNumberWithDot(ho.tipCash)}`);
+                if (ho.water > 0) details.push(`Nước: ${formatNumberWithDot(ho.water)}`);
+                if (ho.tipCardExchange > 0) details.push(`Đổi Tip Card: -${formatNumberWithDot(ho.tipCardExchange)}`);
+
+                tbody.innerHTML += `
+                    <tr class="border-b border-gray-100 hover:bg-gray-50">
+                        <td class="px-3 py-2 text-center font-semibold text-gray-500">${idx + 1}</td>
+                        <td class="px-3 py-2 font-medium text-gray-800">${ho.actualDate}</td>
+                        <td class="px-3 py-2 font-medium text-gray-700">${ho.forDate} (${ho.forShift})</td>
+                        <td class="px-3 py-2 text-gray-800"><b>${ho.sender}</b> → <b>${ho.receiver}</b></td>
+                        <td class="px-3 py-2 text-xs text-gray-600">${details.join(' | ')}</td>
+                        <td class="px-3 py-2 text-right font-bold text-green-600">${formatNumberWithDot(ho.total)}</td>
+                        <td class="px-2 py-2 text-center"><button type="button" class="text-red-500 hover:text-red-700 font-bold" onclick="deleteHandoverRecord(${ho.id})">✕</button></td>
+                    </tr>
+                `;
+            });
+        }
+
+        window.deleteHandoverRecord = function(id) {
+            if (confirm("Bạn có chắc muốn xóa phiếu bàn giao này?")) {
+                globalHandovers = globalHandovers.filter(item => item.id !== id);
+                localStorage.setItem('soul_global_handovers', JSON.stringify(globalHandovers));
+                renderHandoverHistory();
+                calculateFund();
+            }
+        };
+
+        // BÁO CÁO & BIỂU ĐỒ
+        function generateReport() {
+            const reportType = document.getElementById('report-type').value;
+            const monthVal = document.getElementById('report-month').value;
+            const quarterVal = document.getElementById('report-quarter').value;
+            const yearVal = parseInt(document.getElementById('report-year').value, 10) || 2026;
+
+            const currentDateStr = document.getElementById('global-date').value.replace(/\//g, '-');
+            const currentShiftStr = document.getElementById('global-shift').value;
+
+            let revCash = 0, revVisa = 0, revTransfer = 0, revDebt = 0;
+            let catExpenseMap = {};
+            let supExpenseMap = {};
+            let totalExp = 0;
+
+            for (let i = 0; i < localStorage.length; i++) {
+                let key = localStorage.key(i);
+                if (key.startsWith('soul_') && key !== 'soul_global_handovers' && key !== 'soul_expense_categories' && key !== 'soul_expense_suppliers' && key !== 'soul_foreign_currencies') {
+                    try {
+                        let parts = key.split('_');
+                        if (parts.length < 3) continue;
+                        let datePart = parts[1];
+                        let shiftPart = parts[2];
+
+                        let dateObjParts = datePart.split('-');
+                        let d = parseInt(dateObjParts[0], 10);
+                        let m = parseInt(dateObjParts[1], 10);
+                        let y = parseInt(dateObjParts[2], 10);
+
+                        let match = false;
+                        if (reportType === 'ca') {
+                            if (datePart === currentDateStr && shiftPart === currentShiftStr) match = true;
+                        } else if (reportType === 'ngay') {
+                            if (datePart === currentDateStr) match = true;
+                        } else if (reportType === 'thang') {
+                            if (monthVal) {
+                                let mParts = monthVal.split('-');
+                                if (y === parseInt(mParts[0], 10) && m === parseInt(mParts[1], 10)) match = true;
+                            }
+                        } else if (reportType === 'quy') {
+                            let q = Math.ceil(m / 3);
+                            if (y === yearVal && q === parseInt(quarterVal, 10)) match = true;
+                        }
+
+                        if (match) {
+                            let data = JSON.parse(localStorage.getItem(key));
+                            if (data) {
+                                const inputs = data.inputs || {};
+
+                                const cashVal = data.revCash || inputs['rev-cash'] || '';
+                                revCash += parseCurrencyStr(cashVal);
+                                
+                                const visaSysStr = data.revVisaSys || inputs['rev-visa-sys'] || '';
+                                const visaActualStr = data.revVisaActual || inputs['rev-visa-actual'] || '';
+                                let visaSys = parseCurrencyStr(visaSysStr);
+                                let visaActual = parseCurrencyStr(visaActualStr);
+                                revVisa += (visaActualStr.trim() !== '') ? visaActual : visaSys;
+
+                                const transferSysStr = data.revTransfer || inputs['rev-transfer'] || '';
+                                const transferActualStr = data.revTransferActual || inputs['rev-transfer-actual'] || '';
+                                let transferSys = parseCurrencyStr(transferSysStr);
+                                let transferActual = parseCurrencyStr(transferActualStr);
+                                revTransfer += (transferActualStr.trim() !== '') ? transferActual : transferSys;
+
+                                const unpaidVal = data.revUnpaid || inputs['rev-unpaid'] || '';
+                                revDebt += parseCurrencyStr(unpaidVal);
+
+                                if (data.expenses) {
+                                    data.expenses.forEach(exp => {
+                                        let amt = parseCurrencyStr(exp.amt);
+                                        let cat = (exp.cat && exp.cat.trim() !== '') ? exp.cat.trim() : 'Khác';
+                                        let sup = (exp.sup && exp.sup.trim() !== '') ? exp.sup.trim() : 'Khác / Chưa chọn';
+
+                                        if (amt > 0) {
+                                            catExpenseMap[cat] = (catExpenseMap[cat] || 0) + amt;
+                                            supExpenseMap[sup] = (supExpenseMap[sup] || 0) + amt;
+                                            totalExp += amt;
+                                        }
+                                    });
+                                }
+                            }
+                        }
+                    } catch(e) {}
+                }
+            }
+
+            const totalRev = revCash + revVisa + revTransfer + revDebt;
+
+            document.getElementById('dash-rev-today').innerText = formatNumberWithDot(totalRev) + ' đ';
+            document.getElementById('dash-rev-tm').innerText = formatNumberWithDot(revCash);
+            document.getElementById('dash-rev-card').innerText = formatNumberWithDot(revVisa);
+            document.getElementById('dash-rev-transfer').innerText = formatNumberWithDot(revTransfer);
+            document.getElementById('dash-exp-today').innerText = formatNumberWithDot(totalExp) + ' đ';
+
+            // Tính tổng nợ chưa thanh toán toàn hệ thống
+            let debtReportTotal = 0;
+            document.querySelectorAll('#debt-report-tbody tr:not(.detail-row)').forEach(tr => {
+                const td = tr.children[2];
+                if(td) debtReportTotal += parseCurrencyStr(td.innerText);
+            });
+            document.getElementById('dash-debt-total').innerText = formatNumberWithDot(debtReportTotal) + ' đ';
+            // --- TÍNH TOÁN CÁC CHỈ SỐ QUẢN TRỊ TÀI CHÍNH MỚI ---
+            const netProfit = totalRev - totalExp;
+            const opexRate = totalRev > 0 ? ((totalExp / totalRev) * 100).toFixed(1) : 0;
+
+            // 1. Cập nhật Tỷ lệ OpEx/Revenue
+            const opexEl = document.getElementById('dash-opex-rate');
+            if (opexEl) opexEl.innerText = opexRate + '%';
+
+            // 2. Cập nhật Lợi Nhuận Ròng & Đổi màu động (Xanh khi Dương / Đỏ khi Âm)
+            const netProfitEl = document.getElementById('dash-net-profit');
+            const netProfitCard = document.getElementById('card-net-profit');
+            const profitStatusEl = document.getElementById('dash-profit-status');
+
+            if (netProfitEl && netProfitCard && profitStatusEl) {
+                netProfitEl.innerText = formatNumberWithDot(netProfit) + ' đ';
+                if (netProfit >= 0) {
+                    netProfitEl.className = "text-xl font-black text-emerald-600";
+                    netProfitCard.className = "bg-white p-4 rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-emerald-500 relative overflow-hidden flex flex-col justify-between";
+                    profitStatusEl.innerText = "Dòng tiền dương";
+                    profitStatusEl.className = "text-emerald-600 font-semibold";
+                } else {
+                    netProfitEl.className = "text-xl font-black text-red-600";
+                    netProfitCard.className = "bg-white p-4 rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-red-500 relative overflow-hidden flex flex-col justify-between";
+                    profitStatusEl.innerText = "Cảnh báo thâm hụt";
+                    profitStatusEl.className = "text-red-600 font-bold";
+                }
+            }
+            
+            // Lưu tổng doanh thu toàn cục để tính tỷ lệ % danh mục
+            window.currentTotalRev = totalRev;
+            // Cập nhật nhãn Badge Tỷ lệ Chi/DT & đổi màu cảnh báo
+            const opexBadge = document.getElementById('dash-opex-badge');
+            if (opexBadge) {
+                opexBadge.innerText = opexRate + '% OpEx';
+                if (opexRate < 60) {
+                    opexBadge.className = "text-[11px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700";
+                } else if (opexRate <= 80) {
+                    opexBadge.className = "text-[11px] font-bold px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800";
+                } else {
+                    opexBadge.className = "text-[11px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700 animate-pulse";
+                }
+            }
+
+            // Gọi vẽ đồng hồ đo OpEx/Revenue
+            renderOpexGaugeChart(opexRate);
+
+            renderPaymentChart(revCash, revVisa, revTransfer, revDebt);
+
+            const chartMode = document.getElementById('expense-chart-mode').value;
+            const targetMap = chartMode === 'cat' ? catExpenseMap : supExpenseMap;
+            renderExpenseChart(targetMap);
+        }
+
+        function renderPaymentChart(cash, visa, transfer, debt) {
+            const canvas = document.getElementById('paymentMethodChart');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const legendContainer = document.getElementById('payment-legend-container');
+            if (paymentChartInstance) paymentChartInstance.destroy();
+
+            // Giữ nguyên 4 màu sắc ban đầu của hệ thống
+            const items = [
+                { label: 'Tiền mặt', value: cash, color: '#22c55e' },       // Xanh lá (Green)
+                { label: 'Visa / Card', value: visa, color: '#3b82f6' },    // Xanh dương (Blue)
+                { label: 'Chuyển khoản', value: transfer, color: '#a855f7' }, // Tím (Purple)
+                { label: 'Khách nợ', value: debt, color: '#f97316' }        // Cam (Orange)
+            ];
+
+            const total = cash + visa + transfer + debt;
+
+            // 1. Render Bảng chú thích kèm số tiền bên phải (Giống mẫu)
+            if (legendContainer) {
+                if (total === 0) {
+                    legendContainer.innerHTML = '<div class="text-sm text-slate-400 italic text-center py-4">Chưa có dữ liệu doanh thu</div>';
+                } else {
+                    legendContainer.innerHTML = items
+                        .filter(item => item.value > 0)
+                        .map(item => `
+                            <div class="flex items-center justify-between gap-6 text-sm py-1.5 border-b border-slate-100 last:border-none">
+                                <div class="flex items-center gap-3">
+                                    <span class="w-3.5 h-3.5 rounded-md flex-shrink-0 shadow-sm" style="background-color: ${item.color}"></span>
+                                    <span class="font-medium text-slate-700">${item.label}</span>
+                                </div>
+                                <span class="font-bold text-slate-900 tabular-nums whitespace-nowrap pl-4">${formatNumberWithDot(item.value)}đ</span>
+                            </div>
+                        `).join('');
+                }
+            }
+
+            // 2. Render Biểu đồ Donut (Tắt chú thích mặc định bên dưới & bảng đen tooltip)
+            if (total === 0) {
+                paymentChartInstance = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: { labels: ['Chưa có dữ liệu'], datasets: [{ data: [1], backgroundColor: ['#e2e8f0'] }] },
+                    options: { responsive: true, maintainAspectRatio: false, cutout: '65%' }
+                });
+                return;
+            }
+
+            const activeItems = items.filter(item => item.value > 0);
+
+            paymentChartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: activeItems.map(i => i.label),
+                    datasets: [{
+                        data: activeItems.map(i => i.value),
+                        backgroundColor: activeItems.map(i => i.color),
+                        borderWidth: 2,
+                        borderColor: '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '62%', // Độ mỏng nhẫn chuẩn mẫu
+                    plugins: {
+                        legend: { display: false }, // Tắt chữ mặc định nằm dưới
+                        tooltip: { enabled: false } // Tắt bảng đen khi hover
+                    }
+                }
+            });
+        }
+
+        function renderExpenseChart(dataMap) {
+            const canvas = document.getElementById('expenseCategoryChart');
+            const ctx = canvas.getContext('2d');
+            if (expenseChartInstance) expenseChartInstance.destroy();
+
+            // 1. Lấy dữ liệu, lọc > 0 và sắp xếp từ lớn đến nhỏ
+            let sortedEntries = Object.entries(dataMap)
+                .filter(([_, amt]) => amt > 0)
+                .sort((a, b) => b[1] - a[1]);
+
+            // Tìm hoặc tạo khung chứa danh sách phụ bên dưới biểu đồ
+            let subListContainer = document.getElementById('expense-sub-list');
+            if (!subListContainer) {
+                subListContainer = document.createElement('div');
+                subListContainer.id = 'expense-sub-list';
+                canvas.parentElement.parentElement.appendChild(subListContainer);
+            }
+
+            if (sortedEntries.length === 0) {
+                expenseChartInstance = new Chart(ctx, {
+                    type: 'bar',
+                    data: { labels: ['Chưa có dữ liệu'], datasets: [{ data: [0], backgroundColor: ['#f1f5f9'] }] },
+                    options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y' }
+                });
+                subListContainer.innerHTML = '';
+                return;
+            }
+
+            // 2. TỐI ƯU SỐ LƯỢNG: Giữ Top 8 mục lớn nhất, gom các mục nhỏ vào "Các mục nhỏ khác"
+            const MAX_TOP = 8;
+            let finalEntries = [];
+            let smallItems = [];
+
+            if (sortedEntries.length > MAX_TOP) {
+                const topItems = sortedEntries.slice(0, MAX_TOP);
+                smallItems = sortedEntries.slice(MAX_TOP);
+                const otherSum = smallItems.reduce((sum, item) => sum + item[1], 0);
+                
+                finalEntries = [...topItems];
+                if (otherSum > 0) {
+                    finalEntries.push(['Các mục nhỏ khác', otherSum]);
+                }
+            } else {
+                finalEntries = sortedEntries;
+            }
+
+            // Render danh sách cuộn dọc & sắp xếp từ lớn đến nhỏ
+            if (smallItems.length > 0) {
+                // Sắp xếp các mục nhỏ từ lớn đến nhỏ
+                smallItems.sort((a, b) => b[1] - a[1]);
+                
+                const totalSmallSum = smallItems.reduce((sum, item) => sum + item[1], 0);
+
+                let html = `
+                    <div class="mt-3 p-3 bg-slate-50/80 rounded-xl border border-slate-200">
+                        <div class="flex justify-between items-center mb-2 pb-1.5 border-b border-slate-200/80">
+                            <span class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                                <span class="w-2 h-2 rounded-full bg-slate-400"></span>
+                                Chi tiết các mục nhỏ khác (${smallItems.length} mục)
+                            </span>
+                            <span class="text-xs font-semibold text-slate-500">
+                                Tổng: <b class="text-slate-800 font-bold">${formatNumberWithDot(totalSmallSum)} đ</b>
+                            </span>
+                        </div>
+                        <!-- Khung cuộn dọc cố định chiều cao (Max-height ~3 hàng) -->
+                        <div class="max-h-[120px] overflow-y-auto pr-1 space-y-1.5 text-xs table-container">
+                `;
+
+                const currentTotalRev = window.currentTotalRev || 0;
+
+                html += smallItems.map((item, idx) => {
+                    const percentOfRev = currentTotalRev > 0 ? ((item[1] / currentTotalRev) * 100).toFixed(1) : '0.0';
+                    return `
+                    <div class="flex justify-between items-center py-1 px-2.5 rounded bg-white border border-slate-100 hover:bg-slate-100/60 transition">
+                        <span class="text-slate-600 font-medium truncate pr-2" title="${item[0]}">
+                            <span class="text-slate-400 font-bold mr-1.5">${idx + 1}.</span>${item[0]}
+                        </span>
+                        <div class="text-right whitespace-nowrap">
+                            <span class="text-slate-900 font-bold tabular-nums">${formatNumberWithDot(item[1])} đ</span>
+                            <span class="text-[10px] text-slate-400 font-medium ml-1">(${percentOfRev}%)</span>
+                        </div>
+                    </div>
+                    `;
+                }).join('');
+
+                html += `
+                        </div>
+                    </div>
+                `;
+                subListContainer.innerHTML = html;
+            } else {
+                subListContainer.innerHTML = '';
+            }
+
+            const labels = finalEntries.map(item => item[0]);
+            const data = finalEntries.map(item => item[1]);
+
+            // 3. DẢI MÀU SANG TRỌNG (Tông Đỏ Thương Hiệu nhạt dần, mục "Khác" màu xám nhẹ)
+            const colors = labels.map((label, index) => {
+                if (label === 'Các mục nhỏ khác') return '#94a3b8'; // Màu xám trung tính cho mục gom nhóm
+                const alpha = Math.max(0.4, 1 - (index * 0.08));
+                return `rgba(185, 28, 28, ${alpha})`;
+            });
+
+            expenseChartInstance = new Chart(ctx, {
+                type: 'bar',
+                plugins: [ChartDataLabels],
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Số tiền (VNĐ)',
+                        data: data,
+                        backgroundColor: colors,
+                        borderRadius: 5,
+                        barThickness: labels.length > 6 ? 18 : 24
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    layout: {
+                        padding: { right: 90, left: 10, top: 10, bottom: 10 }
+                    },
+                    scales: {
+                        x: {
+                            grid: { display: true, color: '#f1f5f9' },
+                            ticks: {
+                                color: '#94a3b8',
+                                font: { size: 11 },
+                                callback: function(val) { return formatNumberWithDot(val); }
+                            },
+                            border: { dash: [4, 4] }
+                        },
+                        y: {
+                            grid: { display: false },
+                            ticks: { color: '#334155', font: { size: 12, weight: '600' } }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { enabled: false }, // Tắt bảng đen khi rê chuột
+                        datalabels: {
+                            anchor: 'end',
+                            align: 'end',
+                            offset: 8,
+                            color: '#0f172a',
+                            font: { weight: '700', size: 11 },
+                            formatter: function(value) {
+                                return formatNumberWithDot(value) + ' đ';
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // STORAGE MANAGEMENT
+        function saveToStorage() {
+            const key = getStorageKey();
+            const data = {
+                revCash: document.getElementById('rev-cash').value,
+                revVisaSys: document.getElementById('rev-visa-sys').value,
+                revVisaActual: document.getElementById('rev-visa-actual').value,
+                revTransfer: document.getElementById('rev-transfer').value,
+                revTransferActual: document.getElementById('rev-transfer-actual').value,
+                revUnpaid: document.getElementById('rev-unpaid').value,
+                tipCard: document.getElementById('tip-card').value,
+                tipCash: document.getElementById('tip-cash').value,
+                tipForeignAmt: document.getElementById('tip-foreign-amt').value,
+                tipForeignCurrency: document.getElementById('tip-foreign-currency').value,
+                otherWater: document.getElementById('other-water').value,
+                fundStart: document.getElementById('fund-start').value,
+                fundActual: document.getElementById('fund-actual').value,
+                otherIncomes: [],
+                expenses: [],
+                debts: []
+            };
+
+            document.querySelectorAll('#other-income-list > div').forEach(row => {
+                data.otherIncomes.push({
+                    desc: row.querySelector('.other-income-desc').value,
+                    amt: row.querySelector('.other-income-amt').value
+                });
+            });
+
+            document.querySelectorAll('#expense-tbody tr').forEach(row => {
+                data.expenses.push({
+                    pcCode: row.querySelector('.exp-pc').value,
+                    content: row.querySelector('.exp-content').value,
+                    amt: row.querySelector('.exp-amt').value,
+                    cat: row.querySelector('.exp-cat').value,
+                    sup: row.querySelector('.exp-supplier').value
+                });
+            });
+
+            document.querySelectorAll('#debt-tbody tr').forEach(row => {
+                data.debts.push({
+                    name: row.querySelector('.debt-name').value,
+                    amt: row.querySelector('.debt-amt').value,
+                    status: row.querySelector('.debt-status').value
+                });
+            });
+
+            localStorage.setItem(key, JSON.stringify(data));
+        }
+
+        function loadFromStorage() {
+            const key = getStorageKey();
+            const dataStr = localStorage.getItem(key);
+
+            document.getElementById('expense-tbody').innerHTML = '';
+            document.getElementById('debt-tbody').innerHTML = '';
+            document.getElementById('other-income-list').innerHTML = '';
+
+            if (dataStr) {
+                const data = JSON.parse(dataStr);
+                
+                // Đọc linh hoạt cả cấu trúc lưu trữ cũ và mới (inputs)
+                const inputs = data.inputs || {};
+
+                document.getElementById('rev-cash').value = data.revCash || inputs['rev-cash'] || '';
+                document.getElementById('rev-visa-sys').value = data.revVisaSys || inputs['rev-visa-sys'] || '';
+                document.getElementById('rev-visa-actual').value = data.revVisaActual || inputs['rev-visa-actual'] || '';
+                document.getElementById('rev-transfer').value = data.revTransfer || inputs['rev-transfer'] || '';
+                document.getElementById('rev-transfer-actual').value = data.revTransferActual || inputs['rev-transfer-actual'] || '';
+                document.getElementById('rev-unpaid').value = data.revUnpaid || inputs['rev-unpaid'] || '';
+                
+                document.getElementById('tip-card').value = data.tipCard || inputs['tip-card'] || '';
+                document.getElementById('tip-cash').value = data.tipCash || inputs['tip-cash'] || '';
+                document.getElementById('tip-foreign-amt').value = data.tipForeignAmt || inputs['tip-foreign-amt'] || '';
+                
+                const foreignCurrency = data.tipForeignCurrency || inputs['tip-foreign-currency'];
+                if (foreignCurrency) {
+                    document.getElementById('tip-foreign-currency').value = foreignCurrency;
+                }
+                
+                document.getElementById('other-water').value = data.otherWater || inputs['other-water'] || '';
+                document.getElementById('fund-start').value = data.fundStart || inputs['fund-start'] || '';
+                document.getElementById('fund-actual').value = data.fundActual || inputs['fund-actual'] || '';
+
+                // Nạp Thu Khác
+                if (data.otherIncomes && data.otherIncomes.length > 0) {
+                    data.otherIncomes.forEach(item => addOtherIncomeRow(item));
+                } else if (inputs['other-income-desc'] || inputs['other-income-amt']) {
+                    addOtherIncomeRow({ desc: inputs['other-income-desc'] || '', amt: inputs['other-income-amt'] || '' });
+                }
+
+                // Nạp Bảng Chi
+                if (data.expenses && data.expenses.length > 0) {
+                    data.expenses.forEach(item => addExpenseRow(item));
+                }
+
+                // Nạp Công Nợ
+                if (data.debts && data.debts.length > 0) {
+                    data.debts.forEach(item => addDebtRow(item));
+                }
+            } else {
+                document.getElementById('rev-cash').value = '';
+                document.getElementById('rev-visa-sys').value = '';
+                document.getElementById('rev-visa-actual').value = '';
+                document.getElementById('rev-transfer').value = '';
+                document.getElementById('rev-transfer-actual').value = '';
+                document.getElementById('rev-unpaid').value = '';
+                document.getElementById('tip-card').value = '';
+                document.getElementById('tip-cash').value = '';
+                document.getElementById('tip-foreign-amt').value = '';
+                document.getElementById('other-water').value = '';
+                document.getElementById('fund-start').value = '';
+                document.getElementById('fund-actual').value = '';
+            }
+
+            updateAllExpenseSelects();
+            updateAllSupplierSelects();
+            calculateAll();
+            renderExpensesTab();
+        }
+
+        function exportData() {
+            const data = {};
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key.startsWith('soul_')) {
+                    data[key] = localStorage.getItem(key);
+                }
+            }
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", `SoulBenThanh_Data_${new Date().toISOString().slice(0, 10)}.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+        }
+
+        function importData(e) {
+            const fileReader = new FileReader();
+            fileReader.onload = function (event) {
+                try {
+                    const importedData = JSON.parse(event.target.result);
+                    Object.keys(importedData).forEach(key => {
+                        localStorage.setItem(key, importedData[key]);
+                    });
+                    alert("Nhập dữ liệu thành công!");
+                    location.reload();
+                } catch (err) {
+                    alert("File không hợp lệ!");
+                }
+            };
+            if (e.target.files[0]) {
+                fileReader.readAsText(e.target.files[0]);
+            }
+        }
+        function renderOpexGaugeChart(opexRate) {
+            const canvas = document.getElementById('opexGaugeChart');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            if (opexGaugeChartInstance) opexGaugeChartInstance.destroy();
+
+            // Giới hạn tỷ lệ hiển thị tối đa 100% cho kim chỉ
+            const rateVal = Math.min(Math.max(parseFloat(opexRate) || 0, 0), 100);
+
+            // Plugin vẽ Kim chỉ (Needle) đơn giản
+            const gaugeNeedlePlugin = {
+                id: 'gaugeNeedle',
+                afterDatasetDraw(chart, args, options) {
+                    const { ctx, config, data } = chart;
+                    const xCenter = chart.getDatasetMeta(0).data[0].x;
+                    const yCenter = chart.getDatasetMeta(0).data[0].y;
+                    const outerRadius = chart.getDatasetMeta(0).data[0].outerRadius;
+
+                    // Tính góc của kim dựa trên % OpEx (từ -180 độ đến 0 độ)
+                    const angle = Math.PI + (rateVal / 100) * Math.PI;
+
+                    ctx.save();
+                    ctx.translate(xCenter, yCenter);
+                    ctx.rotate(angle);
+
+                    // Vẽ kim chỉ
+                    ctx.beginPath();
+                    ctx.moveTo(0, -4);
+                    ctx.lineTo(outerRadius - 8, 0);
+                    ctx.lineTo(0, 4);
+                    ctx.fillStyle = '#1e293b';
+                    ctx.fill();
+
+                    // Vẽ tâm kim tròn
+                    ctx.beginPath();
+                    ctx.arc(0, 0, 6, 0, Math.PI * 2);
+                    ctx.fillStyle = '#1e293b';
+                    ctx.fill();
+                    ctx.restore();
+                }
+            };
+
+            opexGaugeChartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                plugins: [gaugeNeedlePlugin],
+                data: {
+                    labels: ['An toàn (<60%)', 'Cảnh báo (60-80%)', 'Nguy hiểm (>80%)'],
+                    datasets: [{
+                        data: [60, 20, 20], // Phân bổ 3 vạch màu: 60% Xanh - 20% Vàng - 20% Đỏ
+                        backgroundColor: ['#22c55e', '#eab308', '#ef4444'],
+                        borderWidth: 0,
+                        circumference: 180, // Nửa đường tròn
+                        rotation: 270       // Bắt đầu từ bên trái quay lên
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '75%', // Độ mỏng vừa đẹp
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { enabled: false }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
